@@ -1,0 +1,74 @@
+---
+/**
+ * 标签页 - 动态路由 [tag]
+ * 布局：app-container 内部 grid（sidebar | topbar | content-zone | side | footer）
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAllPosts, getPostsByTag, formatDate } from '../../data/posts';
+
+// 按需 SSR 渲染，支持任意标签
+export const prerender = false;
+
+const { tag } = Astro.params;
+const name = tag || '';
+const posts = tag ? getPostsByTag(tag) : [];
+const count = posts.length;
+
+const allPosts = getAllPosts();
+const recentPosts = allPosts.slice(0, 6).map(p => ({
+  slug: p.slug, title: p.title, excerpt: p.excerpt, date: p.date, category: p.category,
+}));
+---
+
+<BaseLayout title={`#${name} - 标签`} description={`标签 ${name} 下的文章`}>
+  <div class="content-zone">
+      <div class="page-hero">
+        <div class="tag-badge">#{name}</div>
+        <h1>{name}</h1>
+        <p>共 {count} 篇带此标签的文章</p>
+      </div>
+
+      {posts.length > 0 ? (
+        <div class="glass-panel article-list">
+          {posts.map((post, i) => (
+            <a class="article-item" href={`/article/${post.slug}`} data-reveal style={`animation-delay:${i * 0.05}s;`}>
+              <div class="article-meta">
+                <span>{formatDate(post.date)}</span>
+                <span class="dot-sep">·</span>
+                <span class="h-post-cat">{post.category}</span>
+              </div>
+              <div class="article-title">{post.title}</div>
+              <div class="article-excerpt">{post.excerpt}</div>
+              <div class="article-footer">
+                <div class="article-tags">
+                  {post.tags.filter((t: string) => t !== name).slice(0, 3).map((t: string) => (<span class="tag">{t}</span>))}
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div class="glass-card" data-reveal style="text-align:center;padding:var(--sp-10);">
+          <h3>该标签下暂无文章</h3>
+          <p style="color:var(--text-tertiary);">去其他标签看看吧</p>
+          <a href="/tags" class="glass-btn glass-btn-primary" style="margin-top:var(--sp-4);display:inline-flex;">查看所有标签</a>
+        </div>
+      )}
+    </div>
+</BaseLayout>
+
+<style>
+  .tag-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    color: var(--brand);
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: var(--sp-3);
+  }
+  .flat .tag-badge { backdrop-filter: none; background: var(--bg-secondary); }
+</style>

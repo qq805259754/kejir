@@ -1,0 +1,615 @@
+---
+/**
+ * 友情链接 - /links
+ * 顶部：网站信息（名称/LOGO/描述/地址，地址可复制）—— 来源 webConfig
+ * 中部：申请友链按钮 + 展开表单（name/url/info/avatar/email 全部必填）→ POST /api/friend/apply
+ * 底部：友链列表 —— GET /api/friend/list
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="友情链接" description="友情链接" currentPath="/links">
+  <div class="content-zone">
+    <div class="page-header">
+      <h1>友情链接</h1>
+      <span class="page-sub">申请友链，互利共赢</span>
+    </div>
+
+    <!-- 顶部：本站信息卡片 -->
+    <div class="glass-card site-info-card" id="site-info-card" data-reveal>
+      <div class="site-info-logo-wrap">
+        <img id="site-logo" src="" alt="站点 LOGO" class="site-info-logo" />
+        <div class="site-info-logo-fallback" id="site-logo-fallback">科</div>
+      </div>
+      <div class="site-info-meta">
+        <h2 id="site-name" class="site-info-name">科技热</h2>
+        <p id="site-desc" class="site-info-desc">一个专注于技术分享的博客平台</p>
+        <div class="site-info-url-row">
+          <span class="site-info-url-label">站点地址</span>
+          <a id="site-url-link" href="#" target="_blank" rel="noopener" class="site-info-url">—</a>
+          <button type="button" class="copy-btn" id="copy-url-btn" title="复制地址">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span class="copy-btn-text">复制</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 申请友链 -->
+    <div class="apply-section" data-reveal>
+      <button type="button" class="glass-btn glass-btn-primary apply-toggle-btn" id="apply-toggle-btn">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        申请友链
+      </button>
+
+      <!-- 申请表单（默认隐藏） -->
+      <form class="glass-card apply-form" id="apply-form" style="display:none;">
+        <h3 class="apply-form-title">填写友链信息</h3>
+        <p class="apply-form-hint">所有字段均为必填，提交后等待站长审核</p>
+
+        <div class="apply-form-grid">
+          <div class="form-group">
+            <label class="form-label" for="apply-name">网站名称 <span class="req">*</span></label>
+            <input type="text" id="apply-name" class="glass-input" placeholder="例如：科技热" maxlength="30" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="apply-url">网站链接 <span class="req">*</span></label>
+            <input type="url" id="apply-url" class="glass-input" placeholder="https://your-site.com" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="apply-avatar">头像链接 <span class="req">*</span></label>
+            <input type="url" id="apply-avatar" class="glass-input" placeholder="https://your-site.com/logo.png" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="apply-email">联系邮箱 <span class="req">*</span></label>
+            <input type="email" id="apply-email" class="glass-input" placeholder="your@email.com" maxlength="50" required />
+          </div>
+          <div class="form-group form-group-full">
+            <label class="form-label" for="apply-info">网站描述 <span class="req">*</span></label>
+            <textarea id="apply-info" class="glass-input" placeholder="一句话介绍你的网站" maxlength="100" required></textarea>
+          </div>
+        </div>
+
+        <div class="apply-form-actions">
+          <button type="button" class="glass-btn glass-btn-ghost" id="apply-cancel">取消</button>
+          <button type="submit" class="glass-btn glass-btn-primary" id="apply-submit">
+            <span class="submit-text">提交申请</span>
+          </button>
+        </div>
+        <div class="apply-form-msg" id="apply-msg"></div>
+      </form>
+    </div>
+
+    <!-- 友链列表 -->
+    <div class="links-section" data-reveal>
+      <div class="main-section-label">友情链接列表</div>
+      <!-- 加载中 -->
+      <div id="links-loading" class="loading-wrap">
+        <div class="spinner"></div>
+        <span>加载友链中...</span>
+      </div>
+      <!-- 列表容器 -->
+      <div class="links-grid" id="links-grid" style="display:none;"></div>
+      <!-- 空状态 -->
+      <div id="links-empty" class="glass-card empty-card" style="display:none;">
+        <p>暂无友情链接，快来申请第一个吧</p>
+      </div>
+      <!-- 加载失败 -->
+      <div id="links-error" class="glass-card empty-card" style="display:none;">
+        <p>友链加载失败，请稍后刷新重试</p>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  /* ===== 顶部本站信息卡片 ===== */
+  .site-info-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-5);
+    padding: var(--sp-5);
+    margin-bottom: var(--sp-6);
+    flex-wrap: wrap;
+  }
+  .site-info-logo-wrap {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--brand-a15), var(--brand-a25));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .site-info-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+  }
+  .site-info-logo-fallback {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--brand);
+  }
+  .site-info-meta {
+    flex: 1;
+    min-width: 240px;
+  }
+  .site-info-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: var(--sp-2);
+  }
+  .site-info-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: var(--sp-3);
+  }
+  .site-info-url-row {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+  }
+  .site-info-url-label {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+  }
+  .site-info-url {
+    color: var(--brand);
+    font-size: 0.875rem;
+    font-family: var(--font-mono, monospace);
+    text-decoration: none;
+    word-break: break-all;
+    transition: opacity var(--dur-fast);
+  }
+  .site-info-url:hover { opacity: 0.8; text-decoration: underline; }
+  .copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--glass-border-subtle);
+    background: var(--glass-bg-subtle);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all var(--dur-fast) var(--ease-out);
+  }
+  .copy-btn:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+    background: var(--brand-a15);
+  }
+  .copy-btn.copied {
+    border-color: var(--success);
+    color: var(--success);
+    background: rgba(34, 197, 94, 0.1);
+  }
+  .copy-btn-text { line-height: 1; }
+
+  /* ===== 申请友链 ===== */
+  .apply-section { margin-bottom: var(--sp-6); }
+  .apply-toggle-btn { margin-bottom: 0; }
+  .apply-toggle-btn.expanded svg { transform: rotate(45deg); }
+  .apply-toggle-btn svg { transition: transform var(--dur-fast) var(--ease-spring); }
+
+  .apply-form {
+    padding: var(--sp-5);
+    margin-top: var(--sp-3);
+    animation: slideUp 0.35s var(--ease-spring) both;
+  }
+  .apply-form-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: var(--sp-1);
+    color: var(--text-primary);
+  }
+  .apply-form-hint {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    margin-bottom: var(--sp-4);
+  }
+  .apply-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3) var(--sp-4);
+    margin-bottom: var(--sp-4);
+  }
+  .form-group-full { grid-column: 1 / -1; }
+  .form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .req { color: #ef4444; }
+  .apply-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-3);
+  }
+  .apply-form-msg {
+    margin-top: var(--sp-3);
+    font-size: 0.85rem;
+    text-align: right;
+    min-height: 1.2em;
+  }
+  .apply-form-msg.success { color: var(--success); }
+  .apply-form-msg.error { color: var(--danger, #ef4444); }
+
+  /* ===== 友链列表（小卡片样式，和本站风格一致） ===== */
+  .links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--sp-3);
+    padding-bottom: var(--sp-4);
+  }
+  .link-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 12px 16px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--glass-border-subtle);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: all var(--dur) var(--ease-out);
+    text-decoration: none;
+    color: inherit;
+  }
+  .flat .link-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .link-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--brand);
+    box-shadow: 0 8px 24px -8px var(--brand-a25);
+  }
+  .link-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--brand-a15), var(--brand-a25));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--brand);
+    font-size: 0.95rem;
+  }
+  .link-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .link-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .link-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .link-desc {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .empty-card {
+    padding: var(--sp-6);
+    text-align: center;
+    color: var(--text-tertiary);
+  }
+  .empty-card p { margin: 0; font-size: 0.9rem; }
+
+  .loading-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    padding: var(--sp-6);
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
+  }
+
+  /* 响应式 */
+  @media (max-width: 640px) {
+    .apply-form-grid { grid-template-columns: 1fr; }
+    .site-info-card { flex-direction: column; text-align: center; }
+    .site-info-url-row { justify-content: center; }
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
+    }
+
+    // ===== 顶部本站信息（来源 webConfig） =====
+    function loadSiteInfo() {
+      if (!window.__api || typeof window.__api.getWebConfig !== 'function') return;
+      window.__api.getWebConfig().then(function(cfg) {
+        if (!cfg) return;
+        var nameEl = document.getElementById('site-name');
+        var descEl = document.getElementById('site-desc');
+        var logoEl = document.getElementById('site-logo');
+        var logoFallback = document.getElementById('site-logo-fallback');
+        var urlLink = document.getElementById('site-url-link');
+
+        if (cfg.name && nameEl) nameEl.textContent = cfg.name;
+        if (cfg.summary && descEl) descEl.textContent = cfg.summary;
+        // 文档标题
+        if (cfg.name) document.title = '友情链接 - ' + cfg.name;
+
+        // LOGO（先绑事件再设 src，避免缓存图片不触发 onload）
+        if (cfg.logo && logoEl) {
+          logoEl.onload = function() {
+            logoEl.style.display = 'block';
+            if (logoFallback) logoFallback.style.display = 'none';
+          };
+          logoEl.onerror = function() {
+            logoEl.style.display = 'none';
+            if (logoFallback) logoFallback.style.display = '';
+            if (cfg.name) logoFallback.textContent = cfg.name.charAt(0);
+          };
+          logoEl.src = cfg.logo;
+          // 兜底：图片已缓存（complete=true 且有尺寸）时立即显示
+          if (logoEl.complete && logoEl.naturalWidth > 0) {
+            logoEl.style.display = 'block';
+            if (logoFallback) logoFallback.style.display = 'none';
+          }
+        }
+
+        // 地址
+        var url = cfg.webUrl || cfg.url || '';
+        if (url) {
+          if (urlLink) {
+            urlLink.textContent = url;
+            urlLink.href = url.indexOf('http') === 0 ? url : ('https://' + url);
+          }
+        }
+      });
+    }
+
+    // ===== 复制地址 =====
+    var copyBtn = document.getElementById('copy-url-btn');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        var urlLink = document.getElementById('site-url-link');
+        var url = urlLink ? urlLink.textContent.trim() : '';
+        if (!url) return;
+        // 优先用 navigator.clipboard，降级 execCommand
+        var done = function() {
+          copyBtn.classList.add('copied');
+          var textEl = copyBtn.querySelector('.copy-btn-text');
+          var orig = textEl ? textEl.textContent : '';
+          if (textEl) textEl.textContent = '已复制';
+          setTimeout(function() {
+            copyBtn.classList.remove('copied');
+            if (textEl) textEl.textContent = orig || '复制';
+          }, 2000);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(function() {
+            fallbackCopy(url); done();
+          });
+        } else {
+          fallbackCopy(url); done();
+        }
+      });
+    }
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    // ===== 申请友链表单 =====
+    var toggleBtn = document.getElementById('apply-toggle-btn');
+    var applyForm = document.getElementById('apply-form');
+    var applyCancel = document.getElementById('apply-cancel');
+    var applyMsg = document.getElementById('apply-msg');
+    var applySubmit = document.getElementById('apply-submit');
+
+    function toggleApplyForm(forceExpand) {
+      var isHidden = applyForm.style.display === 'none';
+      var show = typeof forceExpand === 'boolean' ? forceExpand : isHidden;
+      applyForm.style.display = show ? '' : 'none';
+      if (show) {
+        toggleBtn.classList.add('expanded');
+        var btnText = toggleBtn.childNodes[toggleBtn.childNodes.length - 1];
+        if (btnText && btnText.nodeType === 3) btnText.textContent = ' 收起申请';
+      } else {
+        toggleBtn.classList.remove('expanded');
+        var btnText2 = toggleBtn.childNodes[toggleBtn.childNodes.length - 1];
+        if (btnText2 && btnText2.nodeType === 3) btnText2.textContent = ' 申请友链';
+      }
+    }
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function() { toggleApplyForm(); });
+    }
+    if (applyCancel) {
+      applyCancel.addEventListener('click', function() { toggleApplyForm(false); });
+    }
+
+    // 表单提交
+    if (applyForm) {
+      applyForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var name = document.getElementById('apply-name').value.trim();
+        var url = document.getElementById('apply-url').value.trim();
+        var info = document.getElementById('apply-info').value.trim();
+        var avatar = document.getElementById('apply-avatar').value.trim();
+        var email = document.getElementById('apply-email').value.trim();
+
+        // 清空提示
+        if (applyMsg) { applyMsg.textContent = ''; applyMsg.className = 'apply-form-msg'; }
+
+        if (!name || !url || !info || !avatar || !email) {
+          if (applyMsg) { applyMsg.textContent = '请填写所有必填字段'; applyMsg.className = 'apply-form-msg error'; }
+          return;
+        }
+        // 邮箱格式校验
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          if (applyMsg) { applyMsg.textContent = '邮箱格式不正确'; applyMsg.className = 'apply-form-msg error'; }
+          return;
+        }
+
+        // 提交
+        applySubmit.disabled = true;
+        var submitText = applySubmit.querySelector('.submit-text');
+        var origText = submitText ? submitText.textContent : '';
+        if (submitText) submitText.textContent = '提交中...';
+
+        if (!window.__api || typeof window.__api.applyFriend !== 'function') {
+          if (applyMsg) { applyMsg.textContent = '接口不可用，请稍后重试'; applyMsg.className = 'apply-form-msg error'; }
+          applySubmit.disabled = false;
+          if (submitText) submitText.textContent = origText;
+          return;
+        }
+
+        window.__api.applyFriend({ name: name, url: url, info: info, avatar: avatar, email: email }).then(function(res) {
+          if (res === true || res === 1) {
+            if (applyMsg) { applyMsg.textContent = '申请提交成功，等待站长审核！'; applyMsg.className = 'apply-form-msg success'; }
+            applyForm.reset();
+            setTimeout(function() { toggleApplyForm(false); }, 2000);
+          } else {
+            if (applyMsg) { applyMsg.textContent = '提交失败，请稍后重试'; applyMsg.className = 'apply-form-msg error'; }
+          }
+          applySubmit.disabled = false;
+          if (submitText) submitText.textContent = origText;
+        }).catch(function(err) {
+          // 透传后端业务错误 message（如"该网站已存在"）
+          var msg = (err && err.message) ? err.message : '提交失败，请检查网络后重试';
+          if (applyMsg) { applyMsg.textContent = msg; applyMsg.className = 'apply-form-msg error'; }
+          applySubmit.disabled = false;
+          if (submitText) submitText.textContent = origText;
+        });
+      });
+    }
+
+    // ===== 友链列表 =====
+    var grid = document.getElementById('links-grid');
+    var loadingEl = document.getElementById('links-loading');
+    var emptyEl = document.getElementById('links-empty');
+    var errorEl = document.getElementById('links-error');
+
+    function showState(state) {
+      if (loadingEl) loadingEl.style.display = state === 'loading' ? 'flex' : 'none';
+      if (grid) grid.style.display = state === 'list' ? 'grid' : 'none';
+      if (emptyEl) emptyEl.style.display = state === 'empty' ? '' : 'none';
+      if (errorEl) errorEl.style.display = state === 'error' ? '' : 'none';
+    }
+
+    function buildLinkCard(f) {
+      // 按需求：名称取 info、地址取 url、头像取 avatar
+      var name = f.info || f.name || '未知站点';
+      var url = f.url || '#';
+      var avatar = f.avatar || '';
+      var firstChar = name.charAt(0).toUpperCase();
+      var href = url.indexOf('http') === 0 ? url : ('https://' + url);
+
+      var avatarHtml;
+      if (avatar) {
+        avatarHtml = '<div class="link-avatar"><img src="' + esc(avatar) + '" alt="' + esc(name) + '" onerror="this.style.display=\'none\';this.parentNode.innerHTML=\'' + esc(firstChar) + '\';" /></div>';
+      } else {
+        avatarHtml = '<div class="link-avatar">' + esc(firstChar) + '</div>';
+      }
+
+      return '<a class="link-card" href="' + esc(href) + '" target="_blank" rel="noopener">'
+        + avatarHtml
+        + '<div class="link-info">'
+        + '<div class="link-name">' + esc(name) + '</div>'
+        + '</div></a>';
+    }
+
+    // 防止重复加载
+    var linksLoaded = false;
+    function loadLinks() {
+      if (linksLoaded) return;
+      if (!window.__api || typeof window.__api.getFriends !== 'function') {
+        showState('error');
+        return;
+      }
+      showState('loading');
+      window.__api.getFriends().then(function(data) {
+        if (!data || !Array.isArray(data) || !data.length) {
+          showState('empty');
+          return;
+        }
+        if (grid) {
+          // 直接拼接所有卡片 HTML，避免 firstChild 丢失
+          var html = '';
+          data.forEach(function(f) {
+            html += buildLinkCard(f);
+          });
+          grid.innerHTML = html;
+        }
+        linksLoaded = true;
+        showState('list');
+      }).catch(function() {
+        showState('error');
+      });
+    }
+
+    // 启动：延迟执行，确保 window.__api 已就绪（BaseLayout 脚本可能在页面脚本之后执行）
+    function init() {
+      loadSiteInfo();
+      loadLinks();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+    // 兜底：延迟再次执行，避免 window.__api 未就绪或请求被 abort 导致列表空白
+    setTimeout(function() {
+      var grid = document.getElementById('links-grid');
+      var loading = document.getElementById('links-loading');
+      // 仍在加载中说明首次 init 没成功渲染
+      if (loading && loading.style.display !== 'none') {
+        if (!grid || !grid.children.length) loadLinks();
+      }
+    }, 800);
+    setTimeout(function() {
+      var grid = document.getElementById('links-grid');
+      var loading = document.getElementById('links-loading');
+      if (loading && loading.style.display !== 'none') {
+        if (!grid || !grid.children.length) loadLinks();
+      }
+    }, 2000);
+  })();
+</script>

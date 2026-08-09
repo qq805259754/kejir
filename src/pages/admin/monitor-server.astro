@@ -1,0 +1,552 @@
+---
+/**
+ * 管理后台 - 监控中心 - 服务器监控 - /admin/monitor-server
+ * 信息展示页：CPU / 内存 / JVM / 磁盘 / 系统信息
+ * API: GET /monitor/server
+ * 自动每 30 秒刷新
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="服务器监控" description="服务器运行监控" currentPath="/admin">
+  <div class="content-zone admin-page monitor-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>服务器监控</h1>
+      <p class="page-sub">实时查看服务器 CPU、内存、JVM、磁盘等运行指标</p>
+    </div>
+
+    <!-- 内容容器 -->
+    <div id="monitor-content">
+      <div class="admin-loading">
+        <div class="admin-loading-spinner"></div>
+        <p>正在加载服务器指标...</p>
+      </div>
+    </div>
+
+    <!-- 底部操作栏 -->
+    <div class="monitor-footer">
+      <span id="monitor-update-time" class="monitor-update-time"></span>
+      <div class="monitor-footer-actions">
+        <span class="monitor-auto-tip">每 30 秒自动刷新</span>
+        <button type="button" id="monitor-refresh-btn" class="glass-btn glass-btn-primary glass-btn-sm">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新数据
+        </button>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .monitor-page { max-width: 1100px; }
+
+  /* ===== 分区 ===== */
+  .monitor-section {
+    margin-bottom: var(--sp-5);
+  }
+  .monitor-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--sp-3);
+    padding-left: var(--sp-2);
+    border-left: 3px solid var(--brand);
+  }
+  .monitor-section-title svg {
+    width: 16px;
+    height: 16px;
+    color: var(--brand);
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    flex-shrink: 0;
+  }
+
+  /* ===== 信息卡片网格 ===== */
+  .monitor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--sp-3);
+  }
+  .monitor-stat-card {
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow: inset 1px 1px 0.5px rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .flat .monitor-stat-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .monitor-stat-card-wide {
+    grid-column: span 2;
+  }
+  .monitor-stat-label {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .monitor-stat-extra {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+  }
+  .monitor-stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+
+  /* ===== 进度条 ===== */
+  .monitor-progress {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--lg-border-subtle, var(--border));
+    overflow: hidden;
+  }
+  .flat .monitor-progress {
+    background: var(--border);
+  }
+  .monitor-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .monitor-progress-fill.normal { background: #22c55e; }
+  .monitor-progress-fill.warning { background: #f59e0b; }
+  .monitor-progress-fill.danger { background: #ef4444; }
+
+  /* ===== 圆环仪表盘 ===== */
+  .monitor-gauge-card {
+    grid-column: span 2;
+    align-items: center;
+  }
+  .monitor-gauge {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    margin: 4px auto 0;
+  }
+  .monitor-gauge-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(0deg);
+  }
+  .gauge-track {
+    stroke: var(--lg-border-subtle, var(--border));
+    opacity: 0.6;
+  }
+  .flat .gauge-track {
+    stroke: var(--border);
+  }
+  .gauge-value {
+    transition: stroke-dasharray 0.6s ease, stroke 0.4s ease;
+    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.08));
+  }
+  .monitor-gauge-text {
+    position: absolute;
+    top: 58%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .monitor-gauge-num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    line-height: 1;
+  }
+  .monitor-gauge-label {
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+  }
+
+  /* ===== 磁盘使用率列 ===== */
+  .monitor-disk-usage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 140px;
+  }
+  .monitor-disk-usage .monitor-progress {
+    flex: 1;
+    min-width: 60px;
+  }
+  .monitor-usage-text {
+    font-size: 0.78rem;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    min-width: 42px;
+    text-align: right;
+  }
+
+  /* ===== 底部操作栏 ===== */
+  .monitor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: var(--sp-5);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-md);
+    background: var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    flex-wrap: wrap;
+  }
+  .flat .monitor-footer {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .monitor-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+  }
+  .monitor-update-time {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+  .monitor-auto-tip {
+    font-size: 0.76rem;
+    color: var(--text-tertiary);
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 768px) {
+    .monitor-stat-card-wide,
+    .monitor-gauge-card {
+      grid-column: span 1;
+    }
+    .monitor-gauge {
+      width: 150px;
+      height: 150px;
+    }
+    .monitor-gauge-num {
+      font-size: 1.3rem;
+    }
+    .monitor-footer {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .monitor-footer-actions {
+      justify-content: space-between;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var contentEl = document.getElementById('monitor-content');
+    var refreshBtn = document.getElementById('monitor-refresh-btn');
+    var updateTimeEl = document.getElementById('monitor-update-time');
+    var autoTimer = null;
+
+    // ===== 工具函数 =====
+    function esc(s) { return Admin.esc(s); }
+
+    // 容错取值：字段不存在时显示 "-"
+    function val(v) {
+      if (v === undefined || v === null || v === '') return '-';
+      return v;
+    }
+
+    // 数字 + 后缀
+    function num(v, suffix) {
+      var n = Number(v);
+      if (isNaN(n)) return '-';
+      return n + (suffix || '');
+    }
+
+    // 保留一位小数
+    function fix1(v) {
+      var n = Number(v);
+      if (isNaN(n)) return '-';
+      return n.toFixed(1);
+    }
+
+    // 格式化字节大小（B/KB/MB/GB/TB）
+    function formatBytes(bytes) {
+      var b = Number(bytes);
+      if (isNaN(b) || b <= 0) return '0 B';
+      var k = 1024;
+      var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+      var i = Math.floor(Math.log(b) / Math.log(k));
+      if (i >= sizes.length) i = sizes.length - 1;
+      return (b / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    // 进度条颜色分级：<60% 绿、60-80% 黄、>80% 红
+    function progressClass(pct) {
+      var n = Number(pct);
+      if (isNaN(n)) return 'normal';
+      if (n >= 80) return 'danger';
+      if (n >= 60) return 'warning';
+      return 'normal';
+    }
+
+    function progressBar(pct) {
+      var n = Number(pct);
+      var v = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+      var cls = progressClass(pct);
+      return '<div class="monitor-progress"><div class="monitor-progress-fill ' + cls + '" style="width:' + v + '%"></div></div>';
+    }
+
+    // 普通统计卡片
+    function statCard(label, value) {
+      return '<div class="monitor-stat-card">' +
+        '<div class="monitor-stat-label">' + esc(label) + '</div>' +
+        '<div class="monitor-stat-value">' + esc(val(value)) + '</div>' +
+        '</div>';
+    }
+
+    // 带进度条的卡片（使用率）
+    function progressCard(label, pct) {
+      var display = fix1(pct) + '%';
+      return '<div class="monitor-stat-card monitor-stat-card-wide">' +
+        '<div class="monitor-stat-label">' + esc(label) + '<span class="monitor-stat-extra">' + esc(display) + '</span></div>' +
+        progressBar(pct) +
+        '</div>';
+    }
+
+    // 仪表盘颜色分级：<60% 绿、60-80% 黄、>80% 红（对齐参考项目 customColors）
+    function gaugeColor(pct) {
+      var n = Number(pct);
+      if (isNaN(n)) return '#22c55e';
+      if (n >= 80) return '#ef4444';
+      if (n >= 60) return '#f59e0b';
+      return '#22c55e';
+    }
+
+    // 圆环仪表盘卡片（dashboard 样式，270° 弧）
+    function gaugeCard(label, pct) {
+      var n = Number(pct);
+      var v = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+      var r = 80;
+      var cx = 100, cy = 100;
+      var arcLen = 2 * Math.PI * r * 0.75; // 270° 弧长
+      var dash = (v / 100) * arcLen;
+      var color = gaugeColor(v);
+      var display = fix1(pct) + '%';
+      // 弧路径：从 135° 顺时针到 45°（底部开口的仪表盘）
+      var rad = Math.PI / 180;
+      var sx = (cx + r * Math.cos(135 * rad)).toFixed(2);
+      var sy = (cy + r * Math.sin(135 * rad)).toFixed(2);
+      var ex = (cx + r * Math.cos(45 * rad)).toFixed(2);
+      var ey = (cy + r * Math.sin(45 * rad)).toFixed(2);
+      var arcPath = 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 1 1 ' + ex + ' ' + ey;
+      return '<div class="monitor-stat-card monitor-gauge-card">' +
+        '<div class="monitor-stat-label">' + esc(label) + '</div>' +
+        '<div class="monitor-gauge">' +
+          '<svg viewBox="0 0 200 200" class="monitor-gauge-svg">' +
+            '<path d="' + arcPath + '" class="gauge-track" fill="none" stroke-width="14" stroke-linecap="round"/>' +
+            '<path d="' + arcPath + '" class="gauge-value" fill="none" stroke-width="14" stroke-linecap="round" ' +
+              'stroke="' + color + '" stroke-dasharray="' + dash.toFixed(2) + ' ' + arcLen.toFixed(2) + '"/>' +
+          '</svg>' +
+          '<div class="monitor-gauge-text">' +
+            '<span class="monitor-gauge-num">' + esc(display) + '</span>' +
+            '<span class="monitor-gauge-label">使用率</span>' +
+          '</div>' +
+        '</div>' +
+        '</div>';
+    }
+
+    // 分区容器
+    function section(iconSvg, title, bodyHtml) {
+      return '<section class="monitor-section">' +
+        '<h2 class="monitor-section-title">' + iconSvg + '<span>' + esc(title) + '</span></h2>' +
+        bodyHtml +
+        '</section>';
+    }
+
+    // SVG 图标
+    var ICON = {
+      cpu: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+      mem: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></svg>',
+      jvm: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+      disk: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+      sys: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
+    };
+
+    // ===== 渲染 =====
+    function render(d) {
+      if (!d) {
+        Admin.showError(contentEl, '暂无监控数据');
+        return;
+      }
+      var html = '';
+
+      // ---- 系统信息 ----
+      var sys = d.sys || d.system || d.sysInfo || {};
+      html += section(ICON.sys, '系统信息', '<div class="monitor-grid">' +
+        statCard('服务器名称', sys.computerName || sys.serverName || sys.name) +
+        statCard('服务器IP', sys.computerIp || sys.serverIp || sys.ip) +
+        statCard('操作系统', sys.osName || sys.os) +
+        statCard('系统架构', sys.osArch || sys.arch) +
+        '</div>');
+
+      // ---- CPU 信息 ----
+      var cpu = d.cpu || {};
+      var cpuUsage = cpu.used !== undefined ? cpu.used : (cpu.usage !== undefined ? cpu.usage : cpu.total);
+      html += section(ICON.cpu, 'CPU 信息', '<div class="monitor-grid">' +
+        gaugeCard('CPU 使用率', cpuUsage) +
+        statCard('核心数', cpu.cpuNum || cpu.core || cpu.cores) +
+        statCard('用户使用率', num(fix1(cpu.used), '%')) +
+        statCard('系统使用率', num(fix1(cpu.sys), '%')) +
+        statCard('当前空闲率', num(fix1(cpu.free), '%')) +
+        '</div>');
+
+      // ---- 内存信息 ----
+      var mem = d.mem || d.memory || {};
+      var memUsage = mem.usage !== undefined ? mem.usage : mem.usedPercent;
+      html += section(ICON.mem, '内存信息', '<div class="monitor-grid">' +
+        gaugeCard('内存使用率', memUsage) +
+        statCard('总内存', formatBytes(mem.total)) +
+        statCard('已用内存', formatBytes(mem.used)) +
+        statCard('空闲内存', formatBytes(mem.free)) +
+        '</div>');
+
+      // ---- JVM 信息 ----
+      var jvm = d.jvm || {};
+      html += section(ICON.jvm, 'JVM 信息', '<div class="monitor-grid">' +
+        statCard('JVM 名称', jvm.name) +
+        statCard('JVM 版本', jvm.version) +
+        statCard('启动时间', jvm.startTime) +
+        statCard('运行时长', jvm.runTime) +
+        statCard('安装路径', jvm.home) +
+        statCard('项目路径', sys.userDir) +
+        '</div>');
+
+      // ---- 磁盘信息（表格） ----
+      var files = d.sysFiles || d.disks || d.diskInfos || [];
+      var diskHtml = '';
+      if (files && files.length) {
+        var rows = files.map(function (f) {
+          var usage = f.usage !== undefined ? f.usage : f.usedPercent;
+          return '<tr>' +
+            '<td style="font-family:var(--font-mono);">' + esc(val(f.dirName || f.path || f.dir)) + '</td>' +
+            '<td>' + esc(val(f.sysTypeName || f.fileSystem || f.fsType)) + '</td>' +
+            '<td>' + esc(val(f.typeName || f.type)) + '</td>' +
+            '<td style="font-family:var(--font-mono);">' + esc(val(f.total)) + '</td>' +
+            '<td style="font-family:var(--font-mono);">' + esc(val(f.used)) + '</td>' +
+            '<td style="font-family:var(--font-mono);">' + esc(val(f.free)) + '</td>' +
+            '<td><div class="monitor-disk-usage">' + progressBar(usage) + '<span class="monitor-usage-text">' + esc(fix1(usage) + '%') + '</span></div></td>' +
+            '</tr>';
+        }).join('');
+        diskHtml = '<div class="admin-table-wrap"><div class="admin-table-scroll"><table class="admin-table"><thead><tr>' +
+          '<th>盘符路径</th><th>文件系统</th><th>盘符类型</th><th>总大小</th><th>已用大小</th><th>剩余大小</th><th>使用率</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      } else {
+        diskHtml = '<div class="admin-empty"><p>暂无磁盘数据</p></div>';
+      }
+      html += section(ICON.disk, '磁盘信息', diskHtml);
+
+      contentEl.innerHTML = html;
+      updateTimeEl.textContent = '最后更新：' + formatNow();
+    }
+
+    function formatNow() {
+      var d = new Date();
+      var pad = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+        ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }
+
+    // ===== 数据加载 =====
+    function loadData(showLoading) {
+      if (showLoading) Admin.showLoading(contentEl);
+      Admin.api.get('/monitor/server').then(function (d) {
+        render(d);
+      }).catch(function (err) {
+        Admin.showError(contentEl, err.message || '加载服务器监控数据失败');
+      });
+    }
+
+    // ===== 自动刷新 =====
+    function startAutoRefresh() {
+      stopAutoRefresh();
+      autoTimer = setInterval(function () {
+        loadData(false);
+      }, 30000);
+    }
+    function stopAutoRefresh() {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+    }
+
+    // ===== 事件绑定 =====
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', function () {
+        loadData(true);
+      });
+    }
+
+    // 页面可见性：隐藏时暂停自动刷新，恢复时继续
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else if (Admin.isLoggedIn()) {
+        startAutoRefresh();
+      }
+    });
+
+    // ===== 初始化 =====
+    loadData(true);
+    startAutoRefresh();
+    }
+  })();
+</script>

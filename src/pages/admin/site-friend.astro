@@ -1,0 +1,358 @@
+---
+/**
+ * 管理后台 - 友链管理 - /admin/site-friend
+ * 接口：GET /sys/friend/list | POST /sys/friend/add | PUT /sys/friend/update | DELETE /sys/friend/delete/{ids}
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="友链管理" description="友链管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>友链管理</h1>
+      <p class="page-sub">管理站点友情链接，支持上线 / 下线状态切换</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-name">名称</label>
+        <input type="text" id="search-name" class="glass-input" placeholder="请输入友链名称" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+
+    // ===== 登录状态检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    // ===== 页面状态 =====
+    var state = {
+      pageNum: 1,
+      pageSize: 10,
+      total: 0,
+      query: { name: '' },
+      loading: false,
+      selectedIds: [],
+      list: [],
+    };
+
+    // 状态徽章：0 下架 / 1 申请 / 2 上架
+    function statusBadge(status) {
+      var s = Number(status);
+      if (s === 0) return Admin.badge('下架', 'danger');
+      if (s === 1) return Admin.badge('申请', 'warning');
+      if (s === 2) return Admin.badge('上架', 'success');
+      return Admin.badge('未知', 'default');
+    }
+
+    // 网址渲染为可点击链接（补全协议）
+    function urlLink(url) {
+      if (!url) return '<span style="color:var(--text-tertiary);">-</span>';
+      var href = url;
+      if (!/^https?:\/\//i.test(href)) href = 'http://' + href;
+      return '<a href="' + Admin.esc(href) + '" target="_blank" rel="noopener noreferrer" style="color:var(--brand);text-decoration:none;word-break:break-all;">' + Admin.esc(url) + '</a>';
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'avatar', title: '头像', width: '80px', align: 'center',
+        render: function (row) { return Admin.thumbImg(row.avatar, row.name); }
+      },
+      {
+        key: 'name', title: '名称',
+        render: function (row) { return '<span style="font-weight:600;">' + Admin.esc(row.name) + '</span>'; }
+      },
+      {
+        key: 'url', title: '网址', width: '200px',
+        render: function (row) { return urlLink(row.url); }
+      },
+      {
+        key: 'info', title: '描述',
+        render: function (row) {
+          var d = row.info || '';
+          return d.length > 40 ? Admin.esc(d.slice(0, 40)) + '…' : Admin.esc(d);
+        }
+      },
+      {
+        key: 'email', title: '邮箱', width: '180px',
+        render: function (row) {
+          return row.email ? '<span style="font-family:var(--font-mono);font-size:0.8rem;">' + Admin.esc(row.email) + '</span>' : '<span style="color:var(--text-tertiary);">-</span>';
+        }
+      },
+      {
+        key: 'status', title: '状态', width: '90px', align: 'center',
+        render: function (row) { return statusBadge(row.status); }
+      },
+      {
+        key: 'sort', title: '排序', width: '80px', align: 'center',
+        render: function (row) { return Admin.esc(row.sort != null ? row.sort : '-'); }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '160px',
+        render: function (row) { return Admin.formatDate(row.createTime, true); }
+      },
+      {
+        title: '操作', width: '140px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('修改', 'act-edit', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== 加载列表 =====
+    function loadList() {
+      if (state.loading) return;
+      state.loading = true;
+      Admin.showLoading(tableContainer);
+      var params = {
+        pageNum: state.pageNum,
+        pageSize: state.pageSize,
+        name: state.query.name,
+      };
+      Admin.api.get('/sys/friend/list', params).then(function (data) {
+        state.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && state.pageNum > 1) {
+          var tp = Math.ceil(page.total / state.pageSize) || 1;
+          state.pageNum = Math.min(state.pageNum - 1, tp);
+          if (state.pageNum < 1) state.pageNum = 1;
+          return loadList();
+        }
+        state.list = page.list;
+        state.total = page.total;
+        Admin.renderTable(tableContainer, columns, page.list, {
+          emptyText: '暂无友链数据',
+          onSelectionChange: function (ids) { state.selectedIds = ids; }
+        });
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          }
+        });
+      }).catch(function (err) {
+        state.loading = false;
+        Admin.showError(tableContainer, err.message);
+      });
+    }
+
+    // ===== 搜索 / 重置 =====
+    function doSearch() {
+      state.query.name = (document.getElementById('search-name').value || '').trim();
+      state.pageNum = 1;
+      loadList();
+    }
+    function doReset() {
+      document.getElementById('search-name').value = '';
+      state.query.name = '';
+      state.pageNum = 1;
+      loadList();
+    }
+
+    // ===== 弹窗表单 =====
+    function formHtml() {
+      return '<form id="edit-form">' +
+        '<div class="admin-form-row">' +
+          '<div class="admin-form-group">' +
+            '<label>名称 <span class="req">*</span></label>' +
+            '<input type="text" name="name" class="glass-input" placeholder="请输入友链名称" required />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>网址 <span class="req">*</span></label>' +
+            '<input type="text" name="url" class="glass-input" placeholder="请输入网址" required />' +
+          '</div>' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>描述</label>' +
+          '<textarea name="info" class="glass-input" placeholder="请输入友链描述"></textarea>' +
+        '</div>' +
+        '<div class="admin-form-row">' +
+          '<div class="admin-form-group">' +
+            '<label>头像 URL</label>' +
+            '<input type="text" name="avatar" class="glass-input" placeholder="请输入头像图片地址" />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>邮箱</label>' +
+            '<input type="text" name="email" class="glass-input" placeholder="请输入联系邮箱" />' +
+          '</div>' +
+        '</div>' +
+        '<div class="admin-form-row">' +
+          '<div class="admin-form-group">' +
+            '<label>状态</label>' +
+            '<select name="status" class="glass-input">' +
+              '<option value="0">下架</option>' +
+              '<option value="1">申请</option>' +
+              '<option value="2">上架</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>排序</label>' +
+            '<input type="number" name="sort" class="glass-input" placeholder="请输入排序" min="0" value="0" />' +
+          '</div>' +
+        '</div>' +
+      '</form>';
+    }
+
+    // ===== 新增 / 编辑弹窗 =====
+    function openEditModal(row) {
+      var isEdit = !!row;
+      Admin.openModal({
+        title: isEdit ? '修改友链' : '新增友链',
+        body: formHtml(),
+        footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>',
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          if (isEdit) {
+            Admin.fillForm(form, row);
+          }
+          var saveBtn = modal.querySelector('#btn-save');
+          saveBtn.addEventListener('click', function () {
+            if (!form.name.value.trim()) {
+              Admin.toast('请输入友链名称', 'error');
+              return;
+            }
+            if (!form.url.value.trim()) {
+              Admin.toast('请输入网址', 'error');
+              return;
+            }
+            var data = Admin.serializeForm(form);
+            data.status = Number(data.status);
+            var promise;
+            if (isEdit) {
+              data.id = row.id;
+              promise = Admin.api.put('/sys/friend/update', data);
+            } else {
+              promise = Admin.api.post('/sys/friend/add', data);
+            }
+            saveBtn.disabled = true;
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              loadList();
+            }).catch(function (err) {
+              saveBtn.disabled = false;
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        }
+      });
+    }
+
+    // ===== 删除 =====
+    function handleDelete(id) {
+      Admin.confirm('确定要删除该友链吗？', function () {
+        Admin.api.del('/sys/friend/delete/' + encodeURIComponent(id)).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 批量删除 =====
+    function handleBatchDelete() {
+      var ids = state.selectedIds;
+      if (!ids || ids.length === 0) {
+        Admin.toast('请先选择要删除的数据', 'info');
+        return;
+      }
+      Admin.confirm('确定要删除选中的 ' + ids.length + ' 条数据吗？', function () {
+        Admin.api.del('/sys/friend/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+          Admin.toast('批量删除成功', 'success');
+          state.selectedIds = [];
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '批量删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 从当前列表中按 id 查找行 =====
+    function findRowById(id) {
+      for (var i = 0; i < state.list.length; i++) {
+        if (String(state.list[i].id) === String(id)) return state.list[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () { openEditModal(null); });
+    document.getElementById('btn-batch-del').addEventListener('click', handleBatchDelete);
+    document.getElementById('search-name').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+    // 表格操作事件委托
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openEditModal(row);
+      } else if (btn.classList.contains('act-del')) {
+        handleDelete(id);
+      }
+    });
+
+    // ===== 初始化 =====
+    loadList();
+    }
+  })();
+</script>

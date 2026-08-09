@@ -1,0 +1,293 @@
+---
+/**
+ * 管理后台 - 文章管理 - /admin/article
+ * 文章列表、搜索、发布状态切换、批量删除
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="文章管理" description="文章管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>文章管理</h1>
+      <p class="page-sub">管理博客文章，支持搜索、发布状态切换、推荐置顶等操作</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label>标题</label>
+        <input type="text" class="glass-input" id="search-title" placeholder="输入文章标题" />
+      </div>
+      <div class="admin-search-field">
+        <label>分类</label>
+        <select class="glass-input" id="search-category">
+          <option value="">全部分类</option>
+        </select>
+      </div>
+      <div class="admin-search-field">
+        <label>标签</label>
+        <select class="glass-input" id="search-tag">
+          <option value="">全部标签</option>
+        </select>
+      </div>
+      <div class="admin-search-field">
+        <label>状态</label>
+        <select class="glass-input" id="search-status">
+          <option value="">全部状态</option>
+          <option value="1">已发布</option>
+          <option value="0">已下架</option>
+        </select>
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增文章
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+    var selectedIds = [];
+    var lastList = [];
+
+    // ===== 加载分类下拉 =====
+    function loadCategoryOptions() {
+      Admin.api.get('/sys/category/list').then(function (data) {
+        var list = Admin.getPageRecords(data).list || [];
+        var sel = document.getElementById('search-category');
+        var html = '<option value="">全部分类</option>';
+        list.forEach(function (c) {
+          html += '<option value="' + Admin.esc(c.id) + '">' + Admin.esc(c.name) + '</option>';
+        });
+        sel.innerHTML = html;
+      }).catch(function () {});
+    }
+
+    // ===== 加载标签下拉 =====
+    function loadTagOptions() {
+      Admin.api.get('/sys/tag/list').then(function (data) {
+        var list = Admin.getPageRecords(data).list || [];
+        var sel = document.getElementById('search-tag');
+        var html = '<option value="">全部标签</option>';
+        list.forEach(function (t) {
+          html += '<option value="' + Admin.esc(t.id) + '">' + Admin.esc(t.name) + '</option>';
+        });
+        sel.innerHTML = html;
+      }).catch(function () {});
+    }
+
+    // ===== 切换发布状态 =====
+    function toggleStatus(id, status) {
+      Admin.api.put('/sys/article/updateStatus', { id: id, status: status }).then(function () {
+        Admin.toast(status === 1 ? '已发布' : '已下架', 'success');
+        crud.refresh();
+      }).catch(function (err) {
+        Admin.toast(err.message || '操作失败', 'error');
+        crud.refresh();
+      });
+    }
+
+    // ===== 标签数组渲染为 badge =====
+    function renderTags(tags) {
+      if (!tags || !tags.length) return '<span style="color:var(--text-tertiary);">-</span>';
+      return tags.map(function (t) {
+        var name = (typeof t === 'object') ? (t.name || t.tagName || '') : String(t);
+        return Admin.badge(name, 'info');
+      }).join(' ');
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'cover', title: '封面', width: '80px',
+        render: function (row) { return Admin.thumbImg(row.cover, row.title); }
+      },
+      {
+        key: 'title', title: '标题',
+        render: function (row) {
+          return '<span style="font-weight:600;">' + Admin.esc(row.title) + '</span>';
+        }
+      },
+      { key: 'nickname', title: '作者', width: '90px' },
+      { key: 'categoryName', title: '分类', width: '90px' },
+      {
+        key: 'tags', title: '标签', width: '150px',
+        render: function (row) { return renderTags(row.tags); }
+      },
+      {
+        key: 'status', title: '发布状态', width: '90px', align: 'center',
+        render: function (row) {
+          var checked = row.status === 1 ? 'checked' : '';
+          return '<label class="admin-switch" data-action="toggle-status" data-id="' + Admin.esc(row.id) + '">' +
+            '<input type="checkbox" ' + checked + ' />' +
+            '<span class="admin-switch-slider"></span></label>';
+        }
+      },
+      {
+        key: 'isRecommend', title: '推荐', width: '70px', align: 'center',
+        render: function (row) {
+          return row.isRecommend === 1 ? Admin.badge('推荐', 'success') : Admin.badge('否', 'default');
+        }
+      },
+      {
+        key: 'isStick', title: '置顶', width: '70px', align: 'center',
+        render: function (row) {
+          return row.isStick === 1 ? Admin.badge('置顶', 'warning') : Admin.badge('否', 'default');
+        }
+      },
+      { key: 'quantity', title: '阅读量', width: '80px', align: 'center' },
+      {
+        key: 'createTime', title: '创建时间', width: '140px',
+        render: function (row) { return Admin.formatDate(row.createTime, true); }
+      },
+      {
+        key: 'actions', title: '操作', width: '110px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('编辑', 'act-edit', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== CRUD 列表工厂 =====
+    var crud = Admin.createCrudList({
+      container: tableContainer,
+      paginationEl: paginationContainer,
+      columns: columns,
+      listApi: function (params) {
+        return Admin.api.get('/sys/article/list', params).then(function (data) {
+          var page = Admin.getPageRecords(data);
+          lastList = page.list;
+          return data;
+        });
+      },
+      deleteApi: function (id) { return Admin.api.del('/sys/article/delete/' + id); },
+      deleteLabel: function (row) { return row.title || ('ID:' + row.id); },
+      emptyText: '暂无文章数据',
+      onSelectionChange: function (ids) { selectedIds = ids; },
+    });
+
+    // ===== 搜索 =====
+    function getSearchParams() {
+      return {
+        title: document.getElementById('search-title').value.trim(),
+        categoryId: document.getElementById('search-category').value,
+        tagId: document.getElementById('search-tag').value,
+        status: document.getElementById('search-status').value,
+      };
+    }
+    function doSearch() { crud.search(getSearchParams()); }
+    function doReset() {
+      document.getElementById('search-title').value = '';
+      document.getElementById('search-category').value = '';
+      document.getElementById('search-tag').value = '';
+      document.getElementById('search-status').value = '';
+      crud.search({});
+    }
+
+    // ===== 根据 ID 查找行数据 =====
+    function findRowById(id) {
+      for (var i = 0; i < lastList.length; i++) {
+        if (String(lastList[i].id) === String(id)) return lastList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () {
+      location.href = '/article-editor?from=admin';
+    });
+    document.getElementById('btn-batch-del').addEventListener('click', function () {
+      crud.batchDelete(selectedIds);
+    });
+
+    // 表格操作事件委托（编辑/删除）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        location.href = '/article-editor?id=' + encodeURIComponent(id) + '&from=admin';
+      } else if (btn.classList.contains('act-del')) {
+        var row = findRowById(id);
+        var label = row ? row.title : '该文章';
+        Admin.confirm('确定要删除「' + label + '」吗？', function () {
+          Admin.api.del('/sys/article/delete/' + id).then(function () {
+            Admin.toast('删除成功', 'success');
+            crud.refresh();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+    });
+
+    // 状态开关事件委托
+    tableContainer.addEventListener('change', function (e) {
+      var cb = e.target.closest('.admin-switch input[type="checkbox"]');
+      if (!cb) return;
+      var label = cb.closest('.admin-switch');
+      var id = label.getAttribute('data-id');
+      var newStatus = cb.checked ? 1 : 0;
+      toggleStatus(id, newStatus);
+    });
+
+    // 回车搜索
+    document.getElementById('search-title').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // ===== 初始化 =====
+    loadCategoryOptions();
+    loadTagOptions();
+    crud.load();
+    }
+  })();
+</script>

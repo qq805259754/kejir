@@ -1,0 +1,279 @@
+---
+/**
+ * 管理后台 - 监控中心 - 在线用户 - /admin/monitor-online
+ * 列表页：在线用户列表、搜索、强制下线
+ * API:
+ *   GET /monitor/online/list            在线用户列表 (params: pageNum, pageSize, username)
+ *   GET /monitor/online/forceLogout/{token}  强制下线
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="在线用户" description="在线用户监控" currentPath="/admin">
+  <div class="content-zone admin-page monitor-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>在线用户</h1>
+      <p class="page-sub">查看当前在线用户并支持强制下线操作</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="online-search-bar">
+      <div class="admin-search-field">
+        <label>用户名</label>
+        <input type="text" class="glass-input" id="search-username" placeholder="输入用户名筛选" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="online-table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="online-pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .monitor-page { max-width: 1100px; }
+
+  /* 在线状态指示点 */
+  .online-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+  }
+
+  /* 强制下线按钮 */
+  .act-force-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #dc2626;
+    transition: all 0.15s;
+  }
+  .act-force-logout:hover {
+    background: rgba(220, 38, 38, 0.1);
+  }
+
+  /* IP / 浏览器等 mono 字体单元格 */
+  .online-mono {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+  }
+</style>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('online-table-container');
+    var paginationContainer = document.getElementById('online-pagination-container');
+
+    // ===== 工具函数 =====
+    function esc(s) { return Admin.esc(s); }
+    function val(v) {
+      if (v === undefined || v === null || v === '') return '-';
+      return v;
+    }
+
+    // ===== 列配置（字段对齐参考后台：tokenValue / username / ip / ipLocation / browser / os / lastLoginTime） =====
+    var columns = [
+      {
+        key: 'tokenValue', title: '会话凭证', width: '180px',
+        render: function (row) {
+          var t = row.tokenValue || row.token || '';
+          if (!t) return '<span style="color:var(--text-tertiary);">-</span>';
+          return '<div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(t) + '"><span class="online-mono">' + esc(t) + '</span></div>';
+        }
+      },
+      {
+        key: 'username', title: '账号', width: '120px',
+        render: function (row) {
+          return '<span class="online-status-dot"></span><span style="font-weight:600;">' + esc(val(row.username || row.userName)) + '</span>';
+        }
+      },
+      {
+        key: 'ip', title: '登录IP', width: '140px',
+        render: function (row) {
+          return '<span class="online-mono">' + esc(val(row.ip || row.ipAddress)) + '</span>';
+        }
+      },
+      {
+        key: 'ipLocation', title: '登录地点',
+        render: function (row) {
+          return esc(val(row.ipLocation || row.loginLocation || row.location));
+        }
+      },
+      {
+        key: 'browser', title: '浏览器', width: '130px',
+        render: function (row) {
+          return esc(val(row.browser));
+        }
+      },
+      {
+        key: 'os', title: '操作系统', width: '140px',
+        render: function (row) {
+          return esc(val(row.os || row.operatingSystem));
+        }
+      },
+      {
+        key: 'lastLoginTime', title: '登录时间', width: '160px',
+        render: function (row) {
+          return '<span class="online-mono">' + Admin.formatDate(row.lastLoginTime || row.loginTime || row.loginDate, true) + '</span>';
+        }
+      },
+      {
+        key: 'actions', title: '操作', width: '100px', align: 'center',
+        render: function (row) {
+          var token = row.tokenValue || row.token || row.accessToken || row.uuid || '';
+          if (!token) return '<span style="color:var(--text-tertiary);font-size:0.8rem;">-</span>';
+          return '<button type="button" class="act-force-logout" data-token="' + esc(token) + '" data-username="' + esc(row.username || row.userName || '') + '">' +
+            '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>' +
+            '强制下线</button>';
+        }
+      },
+    ];
+
+    // ===== 状态 =====
+    var state = {
+      pageNum: 1,
+      pageSize: 10,
+      total: 0,
+      username: '',
+      loading: false,
+    };
+
+    // ===== 加载列表 =====
+    function loadList() {
+      if (state.loading) return;
+      state.loading = true;
+      Admin.showLoading(tableContainer);
+      var params = {
+        pageNum: state.pageNum,
+        pageSize: state.pageSize,
+      };
+      if (state.username) params.username = state.username;
+
+      Admin.api.get('/monitor/online/list', params).then(function (data) {
+        state.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && state.pageNum > 1) {
+          var tp = Math.ceil(page.total / state.pageSize) || 1;
+          state.pageNum = Math.min(state.pageNum - 1, tp);
+          if (state.pageNum < 1) state.pageNum = 1;
+          return loadList();
+        }
+        state.total = page.total;
+        Admin.renderTable(tableContainer, columns, page.list, {
+          emptyText: '暂无在线用户',
+        });
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          },
+        });
+      }).catch(function (err) {
+        state.loading = false;
+        Admin.showError(tableContainer, err.message || '加载在线用户列表失败');
+      });
+    }
+
+    // ===== 搜索 / 重置 =====
+    function doSearch() {
+      state.username = document.getElementById('search-username').value.trim();
+      state.pageNum = 1;
+      loadList();
+    }
+    function doReset() {
+      document.getElementById('search-username').value = '';
+      state.username = '';
+      state.pageNum = 1;
+      loadList();
+    }
+
+    // ===== 强制下线 =====
+    function forceLogout(token, username) {
+      var label = username || '该用户';
+      Admin.confirm('确定要将「' + label + '」强制下线吗？', function () {
+        Admin.api.get('/monitor/online/forceLogout/' + encodeURIComponent(token)).then(function () {
+          Admin.toast('已强制下线', 'success');
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '强制下线失败', 'error');
+        });
+      });
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-refresh').addEventListener('click', loadList);
+    document.getElementById('search-username').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // 强制下线事件委托
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-token]');
+      if (!btn) return;
+      var token = btn.getAttribute('data-token');
+      var username = btn.getAttribute('data-username');
+      if (!token) return;
+      forceLogout(token, username);
+    });
+
+    // ===== 初始化 =====
+    loadList();
+    }
+  })();
+</script>

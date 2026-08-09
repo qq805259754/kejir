@@ -1,0 +1,97 @@
+---
+/**
+ * SidePanel - 右侧边栏（grid-area: side）
+ * 外层 .side-zone 负责容器样式，内层 .side-scroll 负责滚动
+ */
+import PinnedCard from './PinnedCard.astro';
+import HPostCard from './HPostCard.astro';
+import { getAllPosts } from '../data/posts';
+import { siteConfig } from '../data/site';
+
+const posts = getAllPosts();
+const featured = posts.slice(0, 3);
+const hot = posts.slice(0, 5);
+---
+
+<aside class="side-zone">
+  <div class="side-scroll">
+    <PinnedCard
+      title={featured[0]?.title || '暂无文章'}
+      excerpt={featured[0]?.excerpt || ''}
+      slug={featured[0]?.slug || ''}
+    />
+
+    <div class="side-section" data-reveal>
+      <h3 class="side-section-title">热门推荐</h3>
+      <div class="side-post-list">
+        {hot.map((p, i) => (
+          <HPostCard
+            slug={p.slug}
+            title={p.title}
+            excerpt={p.excerpt}
+            date={p.date}
+            category={p.category}
+            c1={['#667eea', '#f093fb', '#4facfe', '#43e97b', '#fa709a'][i % 5]}
+            c2={['#764ba2', '#f5576c', '#00f2fe', '#38f9d7', '#fee140'][i % 5]}
+          />
+        ))}
+      </div>
+    </div>
+
+    <div class="promo-card" id="promo-card">
+      <div class="promo-head">
+        <div class="promo-avatar" id="promo-avatar">{siteConfig.author.charAt(0)}</div>
+        <h4 id="promo-name">{siteConfig.author}</h4>
+      </div>
+      <p id="promo-bio">{siteConfig.description}</p>
+      <div class="promo-contacts" id="promo-contacts"></div>
+      <a href="/about" class="promo-btn">
+        关于我
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </a>
+    </div>
+  </div>
+</aside>
+
+<script is:inline>
+  (function() {
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      var name = cfg.author || cfg.name || '作者';
+      var avatar = cfg.authorAvatar || '';
+      var bio = cfg.description || cfg.bio || '';
+      var nameEl = document.getElementById('promo-name');
+      var avatarEl = document.getElementById('promo-avatar');
+      var bioEl = document.getElementById('promo-bio');
+      var contactsEl = document.getElementById('promo-contacts');
+      if (nameEl && name) nameEl.textContent = name;
+      if (bioEl && bio) bioEl.textContent = bio;
+      if (avatarEl && avatar) {
+        avatarEl.innerHTML = '<img src="' + avatar + '" alt="' + name + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.parentNode.innerHTML=\'' + (name.charAt(0) || 'A') + '\'"/>';
+      }
+      if (contactsEl) {
+        var html = '';
+        var icons = {
+          github: '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>',
+          gitee: '<path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.99 3.65 9.13 8.44 9.88v-6.99H8v-2.89h2.44V9.85c0-2.41 1.44-3.74 3.63-3.74 1.05 0 2.15.19 2.15.19v2.37h-1.21c-1.19 0-1.56.74-1.56 1.5v1.8H16l-.43 2.89h-2.12V22C18.35 21.13 22 16.99 22 12z"/>',
+          email: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>',
+          qqNumber: '<path d="M12 2c-1.9 0-3.5 1.6-3.5 3.5v2c0 .6-.2 1.2-.5 1.7C6.8 10.8 6 13 6 15.5c0 3.6 2.7 6.5 6 6.5s6-2.9 6-6.5c0-2.5-.8-4.7-2-6.3-.3-.5-.5-1.1-.5-1.7v-2C15.5 3.6 13.9 2 12 2z" fill="currentColor" stroke="none"/><ellipse cx="12" cy="13.5" rx="2.5" ry="4" fill="#fff" stroke="none" opacity=".2"/><circle cx="10.3" cy="6" r=".85" fill="#fff" stroke="none"/><circle cx="13.7" cy="6" r=".85" fill="#fff" stroke="none"/><circle cx="10.5" cy="6.2" r=".35" fill="currentColor" stroke="none"/><circle cx="13.5" cy="6.2" r=".35" fill="currentColor" stroke="none"/><path d="M10.8 7.2L12 8.5l1.2-1.3z" fill="#FFA500" stroke="none"/>',
+          wechat: '<path d="M8.5 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/><path d="M12 2C6.48 2 2 5.58 2 10c0 2.35 1.3 4.45 3.36 5.92L4.5 19l3.4-1.7c1.24.44 2.62.7 4.1.7 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/>'
+        };
+        var contactLabels = { github:'GitHub', gitee:'Gitee', email:'邮箱', qqNumber:'QQ', wechat:'微信' };
+        var order = ['github', 'gitee', 'email', 'wechat', 'qqNumber'];
+        order.forEach(function(k) {
+          if (cfg[k]) {
+            var link = k === 'email' ? 'mailto:' + cfg[k] : (k === 'qqNumber' ? 'tencent://message/?uin=' + cfg[k] : cfg[k]);
+            html += '<a href="' + link + '" target="_blank" rel="noopener" class="promo-contact c-' + k + '" title="' + contactLabels[k] + '">'
+              + '<span class="promo-contact-icon"><svg viewBox="0 0 24 24" width="14" height="14">' + icons[k] + '</svg></span>'
+              + '<span class="promo-contact-label">' + contactLabels[k] + '</span></a>';
+          }
+        });
+        contactsEl.innerHTML = html;
+      }
+    }
+    if (window.__webConfig) applyConfig(window.__webConfig);
+    document.addEventListener('webconfig:updated', function(e) { applyConfig(e.detail); });
+  })();
+</script>

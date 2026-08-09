@@ -1,0 +1,143 @@
+---
+/**
+ * MobilePanels - 移动端底部弹出面板（分类/搜索/标签）
+ * - 三个面板共用一个遮罩层，通过 data-panel 属性切换
+ * - is:inline 脚本处理打开/关闭、面板切换、搜索跳转
+ * - 零水合，纯 CSS + inline JS
+ */
+import { getAllCategories, getAllTags } from '../data/posts';
+
+const categories = getAllCategories();
+const tags = getAllTags();
+const hotKeywords = ['AI', '芯片', 'Apple', '大模型', '开源', 'Rust', '量子计算', 'SpaceX'];
+---
+
+<!-- 遮罩 -->
+<div class="mobile-panel-overlay" id="mobile-panel-overlay" aria-hidden="true"></div>
+
+<!-- 分类面板 -->
+<div class="mobile-panel" id="mobile-panel-categories" data-panel="categories" aria-hidden="true">
+  <h3>
+    分类浏览
+    <button class="mobile-panel-close" type="button" data-panel-close aria-label="关闭">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </h3>
+  <div class="mobile-panel-grid">
+    <a href="/categories" data-panel-close>全部</a>
+    {categories.map((c) => (
+      <a href={`/category/${encodeURIComponent(c.name)}`} data-panel-close>{c.name} <small style="opacity:0.6;">{c.count}</small></a>
+    ))}
+  </div>
+</div>
+
+<!-- 搜索面板 -->
+<div class="mobile-panel" id="mobile-panel-search" data-panel="search" aria-hidden="true">
+  <h3>
+    搜索
+    <button class="mobile-panel-close" type="button" data-panel-close aria-label="关闭">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </h3>
+  <form id="mobile-search-form" onsubmit="return false;">
+    <input class="mobile-panel-search-input" type="text" placeholder="搜索文章、标签..." autocomplete="off" id="mobile-search-input" />
+  </form>
+  <div id="mobile-search-results" style="margin-bottom:12px;"></div>
+  <div style="font-size:0.75rem;color:var(--text-tertiary);margin-bottom:var(--sp-2);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">热门搜索</div>
+  <div class="mobile-panel-hot">
+    {hotKeywords.map((k) => (
+      <span class="tag" style="cursor:pointer;" data-search-kw={k}>{k}</span>
+    ))}
+  </div>
+</div>
+
+<!-- 标签面板 -->
+<div class="mobile-panel" id="mobile-panel-tags" data-panel="tags" aria-hidden="true">
+  <h3>
+    标签云
+    <button class="mobile-panel-close" type="button" data-panel-close aria-label="关闭">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </h3>
+  <div class="mobile-tag-cloud">
+    <a href="/tags" data-panel-close>全部标签</a>
+    {tags.map((t) => (
+      <a href={`/tags/${encodeURIComponent(t.name)}`} data-panel-close>#{t.name} <small style="opacity:0.6;">{t.count}</small></a>
+    ))}
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var overlay = document.getElementById('mobile-panel-overlay');
+    if (!overlay) return;
+    var panels = {
+      categories: document.getElementById('mobile-panel-categories'),
+      search: document.getElementById('mobile-panel-search'),
+      tags: document.getElementById('mobile-panel-tags')
+    };
+    var current = null;
+
+    function openPanel(name) {
+      closePanel();
+      var p = panels[name];
+      if (!p) return;
+      current = name;
+      // 使用 GPU 加速的 transform/opacity 显示面板，避免 display 切换导致的重排闪烁
+      p.style.visibility = 'visible';
+      p.style.pointerEvents = 'auto';
+      p.setAttribute('aria-hidden', 'false');
+      // force reflow so transition runs
+      p.offsetHeight;
+      overlay.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      p.classList.add('active');
+      if (name === 'search') {
+        var input = document.getElementById('mobile-search-input');
+        if (input) setTimeout(function () { input.focus(); }, 320);
+      }
+    }
+
+    function closePanel() {
+      overlay.classList.remove('active');
+      document.body.style.overflow = '';
+      if (current && panels[current]) {
+        var p = panels[current];
+        p.classList.remove('active');
+        p.setAttribute('aria-hidden', 'true');
+        p.style.pointerEvents = 'none';
+        // 等待动画结束后再隐藏，避免闪烁
+        setTimeout(function () {
+          if (!p.classList.contains('active')) p.style.visibility = 'hidden';
+        }, 320);
+      }
+      current = null;
+    }
+
+    overlay.addEventListener('click', closePanel);
+    document.querySelectorAll('[data-panel-close]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        // allow default navigation; close panel after small delay
+        setTimeout(closePanel, 50);
+      });
+    });
+
+    var searchForm = document.getElementById('mobile-search-form');
+    if (searchForm) {
+      searchForm.addEventListener('submit', function (e) {
+        var input = document.getElementById('mobile-search-input');
+        var q = input ? input.value.trim() : '';
+        if (!q) { e.preventDefault(); return; }
+        closePanel();
+      });
+    }
+
+    window.openMobilePanel = openPanel;
+    window.closeMobilePanel = closePanel;
+
+    // ESC 关闭
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && current) closePanel();
+    });
+  })();
+</script>

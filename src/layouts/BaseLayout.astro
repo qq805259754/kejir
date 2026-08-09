@@ -1,0 +1,977 @@
+---
+/**
+ * BaseLayout - 全局布局容器
+ * 三列 grid: sidebar | topbar/topbar | main/side | footer/footer
+ * 移动端切换为单列 + 底部 MobileNav
+ * - showRightPanel=true（仅首页）显示右侧标签+文章+关于面板
+ */
+import '../styles/global.css';
+import Sidebar from '../components/Sidebar.astro';
+import TopBar from '../components/TopBar.astro';
+import RightPanel from '../components/RightPanel.astro';
+import AppFooter from '../components/AppFooter.astro';
+import MobileNav from '../components/MobileNav.astro';
+import MobilePanels from '../components/MobilePanels.astro';
+import { siteConfig } from '../data/site';
+import { ClientRouter } from 'astro:transitions';
+
+interface Props {
+  title?: string;
+  description?: string;
+  currentPath?: string;
+  showRightPanel?: boolean;
+}
+
+const {
+  title,
+  description = siteConfig.description,
+  currentPath = Astro.url.pathname,
+  showRightPanel = false,
+} = Astro.props as Props;
+
+const pageTitle = title ? `${title} - ${siteConfig.title}` : siteConfig.title;
+const apiBase = import.meta.env.PUBLIC_API_BASE || '';
+const logoUrl = import.meta.env.PUBLIC_SITE_LOGO || '';
+const isDev = import.meta.env.DEV;
+const defaultPageSize = parseInt(import.meta.env.PUBLIC_DEFAULT_PAGE_SIZE || '10', 10);
+const harmonyOSRegularUrl = import.meta.env.PUBLIC_HARMONYOS_REGULAR_URL || 'https://unpkg.com/harmonyos-sans-sc-webfont-splitted/Regular.css';
+const harmonyOSBoldUrl = import.meta.env.PUBLIC_HARMONYOS_BOLD_URL || 'https://unpkg.com/harmonyos-sans-sc-webfont-splitted/Bold.css';
+const gsapUrl = import.meta.env.PUBLIC_GSAP_URL || 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js';
+const diceBearBase = import.meta.env.PUBLIC_DICE_BEAR_BASE || 'https://api.dicebear.com/7.x/avataaars/svg?seed=';
+---
+
+<!doctype html>
+<html lang={siteConfig.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content={siteConfig.themeColor} />
+    <meta name="description" content={description} />
+    <meta name="keywords" content={siteConfig.keywords.join(',')} />
+    <!-- 解决 strict-origin-when-cross-origin：允许跨域请求携带完整 Referrer -->
+    <meta name="referrer" content="no-referrer-when-downgrade" />
+    <link rel="icon" type="image/png" href={logoUrl || '/favicon.svg'} id="favicon-link" />
+    <title>{pageTitle}</title>
+    <ClientRouter />
+    <!-- HarmonyOS Sans SC Web Font (Regular + Bold) -->
+    <link rel="stylesheet" href={harmonyOSRegularUrl} />
+    <link rel="stylesheet" href={harmonyOSBoldUrl} />
+    <script is:inline define:vars={{ apiBase, logoUrl, isDev, defaultPageSize, diceBearBase }}>
+      (function(){
+        // 开发环境：通过 Astro 服务器端代理（/api/[...path].ts）转发到后端，同源无跨域
+        // 生产环境：同样通过 Astro 服务器端代理转发，或直接使用后端地址
+        // 后端地址在 .env.local / .env.production 中通过 PUBLIC_API_BASE 配置
+        window.__API_BASE__ = '';
+        window.__DEFAULT_LOGO__ = logoUrl || '';
+        window.__DEFAULT_PAGE_SIZE__ = defaultPageSize;
+        window.__DICE_BEAR_BASE__ = diceBearBase;
+        // 本地确定性头像生成器（替代国外 dicebear 服务，国内访问零延迟、不报错）
+        // 基于 seed 哈希生成稳定配色 + 几何图案，输出 data:URL SVG，完全离线可用。
+        // 兼容原 __DICE_BEAR_BASE__ 用法：window.__DICE_BEAR_BASE__ + seed 也能得到本地头像。
+        function __hashSeed(s) {
+          var h = 2166136261;
+          var str = String(s == null ? 'guest' : s);
+          for (var i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = (h * 16777619) >>> 0;
+          }
+          return h;
+        }
+        function __localAvatar(seed) {
+          try {
+            var h = __hashSeed(seed);
+            var palette = [
+              '#5B8DEF', '#7C6FF0', '#E8637A', '#2FB5A5', '#F5A623',
+              '#3A7BD5', '#9B59B6', '#E74C3C', '#16A085', '#F39C12'
+            ];
+            var bg = palette[h % palette.length];
+            var bg2 = palette[(h >> 4) % palette.length];
+            var hue = (h % 36) * 10;
+            var shape = (h >> 8) % 4;
+            var cx = 20 + (h % 8), cy = 16 + ((h >> 6) % 10);
+            var shapes = [
+              '<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="rgba(255,255,255,0.32)"/>',
+              '<rect x="' + (cx-6) + '" y="' + (cy-6) + '" width="12" height="12" rx="3" fill="rgba(255,255,255,0.30)"/>',
+              '<path d="M' + cx + ' ' + (cy-8) + 'l8 14h-16z" fill="rgba(255,255,255,0.30)"/>',
+              '<circle cx="' + cx + '" cy="' + cy + '" r="9" fill="rgba(255,255,255,0.28)"/><circle cx="' + (cx+5) + '" cy="' + (cy-4) + '" r="2.5" fill="rgba(255,255,255,0.45)"/>'
+            ];
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+              + '<defs><linearGradient id="g' + h + '" x1="0" y1="0" x2="1" y2="1">'
+              + '<stop offset="0" stop-color="' + bg + '"/><stop offset="1" stop-color="' + bg2 + '"/></linearGradient></defs>'
+              + '<rect width="64" height="64" rx="12" fill="url(#g' + h + ')"/>'
+              + shapes[shape] + '</svg>';
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+          } catch (e) {
+            return '';
+          }
+        }
+        // 让现有 __DICE_BEAR_BASE__ + seed 用法直接得到本地头像
+        if (!window.__DICE_BEAR_BASE__ || /dicebear\.com/i.test(window.__DICE_BEAR_BASE__)) {
+          window.__DICE_BEAR_BASE__ = 'local:';
+        }
+        window.__genAvatar = __localAvatar;
+        // 全局轻量 Toast 提示（替代原生 alert，统一液态玻璃风格）
+        var __toastTimer = null;
+        window.__showToast = function(msg, type) {
+          var old = document.getElementById('global-toast');
+          if (old) old.remove();
+          if (__toastTimer) { clearTimeout(__toastTimer); __toastTimer = null; }
+          var t = document.createElement('div');
+          t.id = 'global-toast';
+          t.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:99999;padding:12px 24px;border-radius:12px;font-size:0.9rem;font-weight:500;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);transition:all 0.3s ease;opacity:0;pointer-events:none;max-width:90vw;text-align:center;';
+          if (type === 'error') {
+            t.style.background = 'rgba(239,68,68,0.12)';
+            t.style.color = '#ef4444';
+            t.style.border = '1px solid rgba(239,68,68,0.2)';
+          } else if (type === 'success') {
+            t.style.background = 'rgba(34,197,94,0.12)';
+            t.style.color = '#22c55e';
+            t.style.border = '1px solid rgba(34,197,94,0.2)';
+          } else {
+            t.style.background = 'rgba(255,255,255,0.12)';
+            t.style.color = 'var(--text-primary, #333)';
+            t.style.border = '1px solid var(--glass-border, rgba(255,255,255,0.2))';
+          }
+          t.textContent = msg;
+          document.body.appendChild(t);
+          requestAnimationFrame(function() { t.style.opacity = '1'; });
+          __toastTimer = setTimeout(function() {
+            t.style.opacity = '0';
+            setTimeout(function() { if (t.parentNode) t.remove(); }, 300);
+          }, 2600);
+        };
+        function api(path, options) {
+          var base = window.__API_BASE__ || '';
+          var opts = options || {};
+          // Inject Authorization token for authenticated requests
+          var token = '';
+          try { token = localStorage.getItem('token') || ''; } catch(e) {}
+          var headers = opts.headers || {};
+          if (token) headers['Authorization'] = token;
+          // 仅对非 FormData 的 body 设置 JSON Content-Type；FormData 由浏览器自动设置 multipart boundary，不可手动指定
+          if (opts.body && !(opts.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+          opts.headers = headers;
+          // 解决 strict-origin-when-cross-origin：显式设置 referrerPolicy + credentials
+          opts.referrerPolicy = 'no-referrer-when-downgrade';
+          opts.credentials = 'include';
+          opts.mode = 'cors';
+          return fetch(base + path, opts).then(function(r){
+            if (!r.ok) throw new Error('API ' + path + ' failed: ' + r.status);
+            // 先读文本再解析，避免空 body 导致 r.json() 崩溃
+            return r.text().then(function(text) {
+              if (!text || text.trim() === '') return {};
+              try { return JSON.parse(text); } catch(e) { return {}; }
+            }).then(function(d) {
+              // 401 未登录或登录已过期：清除登录状态并跳转登录页
+              // 注意：带 _silent401 标记的「仅查询」接口（如查询当前用户/角色）不在此处
+              // 强制登出——普通用户查询这些接口返回 401（无管理员权限）不应使已登录用户被登出。
+              if (d && d.code === 401 && !opts._silent401) {
+                try {
+                  localStorage.removeItem('token');
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('userRoles');
+                  localStorage.removeItem('sysUserRaw');
+                } catch(e) {}
+                document.dispatchEvent(new Event('user:updated'));
+                // 避免在登录页重复跳转
+                if (location.pathname !== '/login') {
+                  location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+                }
+                throw new Error('未登录或登录已过期');
+              }
+              return (d && d.data !== undefined) ? d.data : d;
+            });
+          });
+        }
+        // 统一安全 JSON 解析：空 body 或非 JSON 返回 null
+        function safeJson(r) {
+          return r.text().then(function(text) {
+            if (!text || text.trim() === '') return null;
+            try { return JSON.parse(text); } catch(e) { return null; }
+          });
+        }
+        window.__api = {
+          // 公开查询接口统一加 _silent401：即使返回 401（如后端对公开接口也做认证校验），
+          // 也绝不强制登出已登录用户，避免「登录后切换页面/菜单时登录状态消失」。
+          getWebConfig: function() { return api('/api/webConfig', { _silent401: true }).catch(function(){ return null; }); },
+          getCarousels: function() { return api('/api/article/getCarousels', { _silent401: true }).then(function(d){ return Array.isArray(d) ? d : (d && d.list) || []; }).catch(function(){ return []; }); },
+          getArticles: function(params) { return api('/api/article/list' + (params ? ('?' + new URLSearchParams(params).toString()) : ''), { _silent401: true }).then(function(d){ return Array.isArray(d) ? d : (d && d.list) || []; }).catch(function(){ return []; }); },
+          getArticle: function(id) { return api('/api/article/detail/' + encodeURIComponent(id), { _silent401: true }).catch(function(){ return null; }); },
+          searchArticles: function(kw, pageNum, pageSize) { return api('/api/article/list?keyword=' + encodeURIComponent(kw) + '&pageNum=' + (pageNum||1) + '&pageSize=' + (pageSize||10), { _silent401: true }).then(function(d){ if (Array.isArray(d)) return { list: d, total: d.length, pages: 1, current: 1 }; var records = (d && d.records) || (d && d.list) || []; return { list: records, total: (d && d.total) || records.length, pages: (d && d.pages) || 1, current: (d && d.current) || (pageNum||1) }; }).catch(function(){ return { list: [], total: 0, pages: 0, current: 1 }; }); },
+          getArchive: function() { return api('/api/article/archive', { _silent401: true }).catch(function(){ return null; }); },
+          // Comments（公开列表接口）
+          getComments: function(postId) { return api('/api/comment/list?articleId=' + encodeURIComponent(postId), { _silent401: true }).then(function(d){ return Array.isArray(d) ? d : (d && (d.records || d.list)) || []; }).catch(function(){ return []; }); },
+          addComment: function(data) { return api('/addComment', { method: 'POST', body: JSON.stringify(data) }); },
+          // Messages（留言板）
+          getMessages: function() { return api('/api/message/list', { _silent401: true }).then(function(d){ return Array.isArray(d) ? d : (d && (d.records || d.list)) || []; }).catch(function(){ return []; }); },
+          // 新增留言：POST /api/message/add，字段 avatar/nickname/content/status
+          addMessage: function(data) {
+            var base = window.__API_BASE__ || '';
+            var token = '';
+            try { token = localStorage.getItem('token') || ''; } catch (e) {}
+            return fetch(base + '/api/message/add', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': token },
+              body: JSON.stringify(data),
+              referrerPolicy: 'no-referrer-when-downgrade',
+              credentials: 'include',
+              mode: 'cors'
+            }).then(safeJson).then(function(d) {
+              // 成功返回 true；失败时抛错带后端 message
+              if (d && d.code === 200) return d.data;
+              var err = new Error((d && d.message) ? d.message : '留言失败');
+              err.code = d ? d.code : 0;
+              throw err;
+            });
+          },
+          // Friends（友情链接）
+          getFriends: function() { return api('/api/friend/list', { _silent401: true }).then(function(d){ return Array.isArray(d) ? d : (d && (d.records || d.list)) || []; }).catch(function(){ return []; }); },
+          // 申请友链：POST /api/friend/apply，字段 name/url/info/avatar/email
+          // 需登录；后端可能返回 code:500 + 业务 message（如"该网站已存在"），需透传给前端
+          applyFriend: function(data) {
+            var base = window.__API_BASE__ || '';
+            var token = '';
+            try { token = localStorage.getItem('token') || ''; } catch (e) {}
+            return fetch(base + '/api/friend/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': token },
+              body: JSON.stringify(data),
+              referrerPolicy: 'no-referrer-when-downgrade',
+              credentials: 'include',
+              mode: 'cors'
+            }).then(safeJson).then(function(d) {
+              // 成功返回 true；失败时抛错带后端 message
+              if (d && d.code === 200) return d.data;
+              var err = new Error((d && d.message) ? d.message : '申请失败');
+              err.code = d ? d.code : 0;
+              throw err;
+            });
+          },
+          // User（_silent401：普通用户查询当前用户信息返回 401/403 时不应被强制登出）
+          getMe: function() { return api('/api/user/me', { _silent401: true }).catch(function(){ return null; }); },
+          login: function(data) {
+            var base = window.__API_BASE__ || '';
+            return fetch(base + '/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+              referrerPolicy: 'no-referrer-when-downgrade',
+              credentials: 'include',
+              mode: 'cors'
+            }).then(function(r) {
+              // 先读取文本，避免空 body 时 r.json() 报错
+              return r.text().then(function(text) {
+                if (!text || text.trim() === '') {
+                  throw new Error('后端返回空响应（状态码 ' + r.status + '，可能被安全策略拦截）');
+                }
+                try {
+                  return JSON.parse(text);
+                } catch (e) {
+                  throw new Error('后端返回非 JSON 响应（状态码 ' + r.status + '）');
+                }
+              });
+            }).then(function(d) {
+              // 登录接口返回完整 JSON：{code, message, data}
+              // 成功时 data 含 token 和用户信息；失败时 code 非 200
+              if (d && d.code !== 200 && d.code !== 0) {
+                throw new Error(d.message || '登录失败');
+              }
+              var result = (d && d.data !== undefined) ? d.data : d;
+              if (!result || !result.token) {
+                throw new Error(d.message || '未获取到登录凭证');
+              }
+              return result;
+            });
+          },
+          // _silent401：普通用户查询角色/资料返回 401 不应被强制登出（checkAdminRole 依赖此接口）
+          getProfile: function() { return api('/sys/user/profile', { _silent401: true }).catch(function(){ return null; }); },
+          updateProfile: function(data) {
+            return api('/protal/user/updateProfile', { method: 'PUT', body: JSON.stringify(data) }).catch(function() {
+              return data;
+            });
+          },
+          // 我的文章（分页+标题搜索）
+          myArticle: function(pageNum, pageSize, title) {
+            var q = 'pageNum=' + (pageNum||1) + '&pageSize=' + (pageSize||10);
+            if (title) q += '&title=' + encodeURIComponent(title);
+            return api('/protal/user/myArticle?' + q);
+          },
+          // 我的评论（分页+标题搜索）
+          myComment: function(pageNum, pageSize, title) {
+            var q = 'pageNum=' + (pageNum||1) + '&pageSize=' + (pageSize||10);
+            if (title) q += '&title=' + encodeURIComponent(title);
+            return api('/protal/user/comment?' + q);
+          },
+          // 我的回复（分页+标题搜索）
+          myReply: function(pageNum, pageSize, title) {
+            var q = 'pageNum=' + (pageNum||1) + '&pageSize=' + (pageSize||10);
+            if (title) q += '&title=' + encodeURIComponent(title);
+            return api('/protal/user/myReply?' + q);
+          },
+          // 我的点赞（分页+标题搜索）
+          myLike: function(pageNum, pageSize, title) {
+            var q = 'pageNum=' + (pageNum||1) + '&pageSize=' + (pageSize||10);
+            if (title) q += '&title=' + encodeURIComponent(title);
+            return api('/protal/user/myLike?' + q);
+          },
+          // 删除文章（后台接口 DELETE /sys/article/delete/{ids}，支持批量逗号分隔）
+          delArticle: function(id) { return api('/sys/article/delete/' + encodeURIComponent(id), { method: 'DELETE' }); },
+          // 新增文章 POST /sys/article/add，body 为文章对象
+          addArticle: function(data) { return api('/sys/article/add', { method: 'POST', body: JSON.stringify(data) }); },
+          // 修改文章 PUT /sys/article/update，body 为文章对象（含 id）
+          updateArticle: function(data) { return api('/sys/article/update', { method: 'PUT', body: JSON.stringify(data) }); },
+          // 统一保存：有 id 走更新，无 id 走新增
+          // 新增/更新文章：有 id 走 PUT /sys/article/update，无 id 走 POST /sys/article/add
+          // 需登录 + sys:article:add/update 权限；后端可能返回 code:500 + 业务 message，需透传给前端
+          saveArticle: function(data) {
+            var base = window.__API_BASE__ || '';
+            var token = '';
+            try { token = localStorage.getItem('token') || ''; } catch (e) {}
+            var url = (data && data.id) ? '/sys/article/update' : '/sys/article/add';
+            var method = (data && data.id) ? 'PUT' : 'POST';
+            return fetch(base + url, {
+              method: method,
+              headers: { 'Content-Type': 'application/json', 'Authorization': token },
+              body: JSON.stringify(data),
+              referrerPolicy: 'no-referrer-when-downgrade',
+              credentials: 'include',
+              mode: 'cors'
+            }).then(safeJson).then(function(d) {
+              if (d && d.code === 200) return d.data;
+              var err = new Error((d && d.message) ? d.message : '保存失败');
+              err.code = d ? d.code : 0;
+              throw err;
+            });
+          },
+          // 后台文章详情（用于编辑回显，字段比门户接口更全）
+          getAdminArticleDetail: function(id) { return api('/sys/article/detail/' + encodeURIComponent(id)); },
+          // 图片上传（multipart/form-data，字段名 file），返回 URL 字符串
+          uploadFile: function(file) {
+            var fd = new FormData();
+            fd.append('file', file);
+            return api('/file/upload', { method: 'POST', body: fd });
+          },
+          // 文件删除：DELETE /file/delete?url=文件地址
+          deleteFile: function(url) {
+            var base = window.__API_BASE__ || '';
+            var token = '';
+            try { token = localStorage.getItem('token') || ''; } catch (e) {}
+            return fetch(base + '/file/delete?url=' + encodeURIComponent(url), {
+              method: 'DELETE',
+              headers: { 'Authorization': token },
+              referrerPolicy: 'no-referrer-when-downgrade',
+              credentials: 'include',
+              mode: 'cors'
+            }).then(safeJson).then(function(d) {
+              if (d && d.code === 200) return d.data;
+              var err = new Error((d && d.message) ? d.message : '删除失败');
+              err.code = d ? d.code : 0;
+              throw err;
+            });
+          },
+          // 分类列表（后台接口，门户接口返回空）
+          getCategoryList: function() { return api('/sys/category/list').then(function(d){ return Array.isArray(d) ? d : (d && (d.records || d.list)) || []; }).catch(function(){ return []; }); },
+          // 删除评论/回复（统一接口 /protal/user/delMyComment/{id}）
+          delComment: function(id) { return api('/protal/user/delMyComment/' + encodeURIComponent(id), { method: 'DELETE' }); },
+          // 删除回复（与评论统一接口 /protal/user/delMyComment/{id}）
+          delReply: function(id) { return api('/protal/user/delMyComment/' + encodeURIComponent(id), { method: 'DELETE' }); },
+          // 点赞/取消点赞：统一接口 GET /api/article/like/{id}，后端自动 toggle
+          like: function(articleId) { return api('/api/article/like/' + encodeURIComponent(articleId)); },
+          // 兼容旧调用：unlike 与 like 走同一 toggle 接口
+          unlike: function(articleId) { return api('/api/article/like/' + encodeURIComponent(articleId)); },
+          logout: function() { return api('/auth/logout', { method: 'POST' }).catch(function(){ return null; }); },
+          isLoggedIn: function() { try { return !!localStorage.getItem('token'); } catch(e) { return false; } },
+          getUser: function() { try { var u = localStorage.getItem('user'); return u ? JSON.parse(u) : null; } catch(e) { return null; } },
+          clearAuth: function() { try { localStorage.removeItem('token'); localStorage.removeItem('user'); localStorage.removeItem('userRoles'); } catch(e) {} }
+        };
+        window.__webConfig = null;
+        window.__api.getWebConfig().then(function(cfg) {
+          if (!cfg) return;
+          window.__webConfig = cfg;
+          document.dispatchEvent(new CustomEvent('webconfig:updated', { detail: cfg }));
+          if (cfg.name) document.title = document.title.replace(/ - [^-]+$/, ' - ' + cfg.name);
+          if (cfg.logo) {
+            var fav = document.getElementById('favicon-link');
+            if (fav) fav.href = cfg.logo;
+          }
+        }).catch(function(){});
+        try {
+          var t = localStorage.getItem('theme');
+          if (t === 'dark') document.documentElement.classList.add('dark');
+          var g = localStorage.getItem('glass-mode');
+          if (g === 'flat') document.documentElement.classList.add('flat');
+        } catch(e) {}
+      })();
+    </script>
+
+    <!-- 全局主题/风格切换事件委托（View Transitions 后事件监听器可能丢失，使用委托确保可靠） -->
+    <script is:inline data-astro-rerun>
+      (function() {
+        // data-astro-rerun：每次页面加载及 View Transitions 导航时执行。
+        // 每次导航都从 localStorage 重新应用主题/玻璃模式到 <html> 的 class，
+        // 确保切换页面后深浅色与液态玻璃/平面风格全局保持一致，不因跳转/返回首页而恢复默认。
+        function applySavedTheme() {
+          try {
+            var t = localStorage.getItem('theme');
+            var g = localStorage.getItem('glass-mode');
+            var html = document.documentElement;
+            if (t === 'dark') html.classList.add('dark'); else html.classList.remove('dark');
+            if (g === 'flat') html.classList.add('flat'); else html.classList.remove('flat');
+          } catch (e) {}
+        }
+        applySavedTheme();
+        function updateThemeUI(isDark) {
+          document.querySelectorAll('.theme-icon-moon').forEach(function(el) { el.style.display = isDark ? 'none' : ''; });
+          document.querySelectorAll('.theme-icon-sun').forEach(function(el) { el.style.display = isDark ? '' : 'none'; });
+          var tv = document.getElementById('me-theme-value');
+          if (tv) tv.textContent = isDark ? '深色' : '浅色';
+        }
+        function updateGlassUI(isFlat) {
+          document.querySelectorAll('.glass-icon-flat').forEach(function(el) { el.style.display = isFlat ? 'none' : ''; });
+          document.querySelectorAll('.glass-icon-glass').forEach(function(el) { el.style.display = isFlat ? '' : 'none'; });
+          var gv = document.getElementById('me-glass-value');
+          if (gv) gv.textContent = isFlat ? '平面' : '液态玻璃';
+        }
+        function triggerThemeAnim() {
+          document.documentElement.classList.add('theme-animating');
+          setTimeout(function() { document.documentElement.classList.remove('theme-animating'); }, 500);
+        }
+        function onThemeToggle() {
+          var isDark = document.documentElement.classList.toggle('dark');
+          try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch(e) {}
+          updateThemeUI(isDark);
+          triggerThemeAnim();
+        }
+        function onGlassToggle() {
+          var isFlat = document.documentElement.classList.toggle('flat');
+          try { localStorage.setItem('glass-mode', isFlat ? 'flat' : 'glass'); } catch(e) {}
+          updateGlassUI(isFlat);
+          // 与主题切换一致：切换液态玻璃/平面时平滑过渡背景色，避免手机端整体闪烁
+          triggerThemeAnim();
+        }
+        function clickHandler(e) {
+          var themeBtn = e.target.closest('#theme-toggle, #me-theme-item');
+          if (themeBtn) { e.preventDefault(); e.stopPropagation(); onThemeToggle(); return; }
+          var glassBtn = e.target.closest('#glass-toggle, #me-glass-item');
+          if (glassBtn) { e.preventDefault(); e.stopPropagation(); onGlassToggle(); return; }
+        }
+        if (window.__globalToggleClickHandler) {
+          document.removeEventListener('click', window.__globalToggleClickHandler, true);
+        }
+        window.__globalToggleClickHandler = clickHandler;
+        // 使用 capture 阶段，确保即使子元素阻止冒泡也能响应
+        document.addEventListener('click', clickHandler, true);
+        updateThemeUI(document.documentElement.classList.contains('dark'));
+        updateGlassUI(document.documentElement.classList.contains('flat'));
+      })();
+    </script>
+  </head>
+  <body class={showRightPanel ? '' : 'no-aside'}>
+    <!-- Liquid Glass SVG Refraction Filters — iOS 27 lensing: optical bend + chromatic aberration -->
+    <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;">
+      <defs>
+        <!-- Chromatic aberration: R/G/B channels displaced separately for prismatic edge glow -->
+        <filter id="liquid-glass-chroma" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur"/>
+          <!-- R channel shifted right-up -->
+          <feOffset in="blur" dx="1.2" dy="-0.8" result="shiftR"/>
+          <feColorMatrix in="shiftR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0" result="red"/>
+          <!-- B channel shifted left-down -->
+          <feOffset in="blur" dx="-1.2" dy="0.8" result="shiftB"/>
+          <feColorMatrix in="shiftB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 0.35 0" result="blue"/>
+          <!-- G channel unchanged (center) -->
+          <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0  0 0 1 0 0  0 0 0 0 0  0 0 0 0.5 0" result="green"/>
+          <!-- Merge all channels -->
+          <feMerge>
+            <feMergeNode in="red"/>
+            <feMergeNode in="green"/>
+            <feMergeNode in="blue"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <!-- Strong refraction: lens-like displacement simulating water droplet curvature -->
+        <filter id="liquid-glass-refract" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="3" seed="17" result="turb"/>
+          <feGaussianBlur in="turb" stdDeviation="5" result="smoothTurb"/>
+          <!-- Magnification: slight zoom effect via scale + displacement -->
+          <feComponentTransfer in="smoothTurb" result="scaledTurb">
+            <feFuncR type="linear" slope="1.4" intercept="-0.2"/>
+            <feFuncG type="linear" slope="1.4" intercept="-0.2"/>
+          </feComponentTransfer>
+          <feDisplacementMap in="SourceGraphic" in2="scaledTurb" scale="80" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <!-- Lighter refraction for small elements -->
+        <filter id="liquid-glass-refract-sm" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="0.010 0.014" numOctaves="2" seed="37" result="turb"/>
+          <feGaussianBlur in="turb" stdDeviation="3" result="smoothTurb"/>
+          <feDisplacementMap in="SourceGraphic" in2="smoothTurb" scale="40" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+        <!-- Surface ripple filter for mouse trail -->
+        <filter id="liquid-glass-ripple" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+          <feTurbulence type="turbulence" baseFrequency="0.02 0.03" numOctaves="2" seed="53" result="turb">
+            <animate attributeName="seed" values="53;54;55;56;55;54;53" dur="1.5s" repeatCount="indefinite"/>
+          </feTurbulence>
+          <feGaussianBlur in="turb" stdDeviation="1.5" result="smoothTurb"/>
+          <feDisplacementMap in="SourceGraphic" in2="smoothTurb" scale="25" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    </svg>
+
+    <!-- Rainbow mesh background — 5 floating gradient blobs with breathe animation -->
+    <div class="mesh-bg" aria-hidden="true">
+      <div class="mesh-blob mesh-blob-1"></div>
+      <div class="mesh-blob mesh-blob-2"></div>
+      <div class="mesh-blob mesh-blob-3"></div>
+      <div class="mesh-blob mesh-blob-4"></div>
+      <div class="mesh-blob mesh-blob-5"></div>
+    </div>
+
+    <div class="app-shell">
+    <div class="app-container">
+      <Sidebar currentPath={currentPath} />
+      <TopBar transition:persist="topbar" />
+
+      <main class="main-zone" transition:animate="slide">
+        <slot />
+      </main>
+
+      {showRightPanel && <RightPanel transition:persist="rightpanel" />}
+
+      <AppFooter transition:persist="footer" />
+    </div>
+    </div>
+
+    <MobileNav currentPath={currentPath} transition:persist="mobilenav" />
+    <MobilePanels transition:persist="mobilepanels" />
+
+    <!-- GSAP 按需加载：仅在非移动端（>=768px）注入，移动端首页轮播走轻量 CSS/JS 分支，
+         避免为移动端加载约 70KB 的动画库，加快首屏与页面切换 -->
+    <script is:inline define:vars={{ gsapUrl }}>
+      (function () {
+        try {
+          if (window.innerWidth >= 768 && !window.gsap) {
+            var s = document.createElement('script');
+            s.src = gsapUrl;
+            s.defer = true;
+            s.async = true;
+            s.onload = function () { window.dispatchEvent(new Event('gsap:loaded')); };
+            document.body.appendChild(s);
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script is:inline>
+      // 移动端性能优化：禁用重度视觉效果，降低 GPU 持续开销
+      (function () {
+        var isMobile = window.matchMedia('(max-width: 768px)').matches || (window.innerWidth < 768);
+        if (!isMobile) return;
+        // 移除 SVG 涟漪 filter 中的无限 <animate> 循环（feTurbulence seed 每帧重算）
+        try {
+          var anims = document.querySelectorAll('#liquid-glass-ripple animate, [id*="liquid-glass"] animate');
+          for (var i = 0; i < anims.length; i++) anims[i].remove();
+        } catch (e) {}
+        // 触屏设备无鼠标，移除涟漪动画与鼠标高亮追踪，减少事件与 DOM 开销
+        if (window.matchMedia('(hover: none), (pointer: coarse)').matches) {
+          var ripple = document.querySelector('.glass-ripple');
+          var style = document.createElement('style');
+          style.textContent = '.glass-ripple{display:none!important;}';
+          document.head.appendChild(style);
+        }
+      })();
+    </script>
+    <script is:inline>
+      // Global mouse-tracking specular highlight + water ripple trail for glass surfaces
+      (function() {
+        var root = document.documentElement;
+        var rafId = null;
+        var mx = 50, my = 50;
+        var trailCount = 0;
+        var lastTrailTime = 0;
+        var isFlat = false;
+
+        function update() {
+          root.style.setProperty('--mouse-x', mx + '%');
+          root.style.setProperty('--mouse-y', my + '%');
+          rafId = null;
+        }
+
+        // Create a water ripple droplet at the cursor position
+        function spawnRipple(x, y) {
+          if (isFlat) return;
+          var ripple = document.createElement('div');
+          ripple.className = 'glass-ripple';
+          ripple.style.left = x + 'px';
+          ripple.style.top = y + 'px';
+          document.body.appendChild(ripple);
+          // Auto-remove after animation completes
+          setTimeout(function() {
+            if (ripple.parentNode) ripple.parentNode.removeChild(ripple);
+          }, 900);
+        }
+
+        document.addEventListener('mousemove', function(e) {
+          mx = (e.clientX / window.innerWidth) * 100;
+          my = (e.clientY / window.innerHeight) * 100;
+          if (!rafId) rafId = requestAnimationFrame(update);
+
+          // Spawn ripple droplets when moving over glass surfaces
+          // Detects: explicit data-glass, classnames, or elements with backdrop-filter
+          var now = Date.now();
+          if (now - lastTrailTime < 70) return;
+          var target = e.target;
+          var onGlass = false;
+          var glassClasses = {
+            'glass-surface':1,'glass-card':1,'glass-panel':1,'glass-btn':1,
+            'stack-card':1,'sidebar':1,'topbar':1,'topbar-search':1,
+            'right-panel':1,'app-footer':1,'me-group':1,'link-card':1,
+            'mini-post-card':1,'h-post-card':1,'topbar-icon-btn':1,
+            'topbar-avatar':1
+          };
+          while (target && target !== document.body) {
+            if (target.nodeType === 1) {
+              if (target.dataset && target.dataset.glass !== undefined) { onGlass = true; break; }
+              var cls = target.classList;
+              if (cls) {
+                for (var c in glassClasses) { if (cls.contains(c)) { onGlass = true; break; } }
+                if (onGlass) break;
+              }
+            }
+            target = target.parentNode;
+          }
+          if (onGlass) {
+            lastTrailTime = now;
+            spawnRipple(e.clientX, e.clientY);
+            trailCount++;
+          }
+        }, { passive: true });
+
+        // Watch for flat mode toggle to disable ripples
+        var flatObserver = new MutationObserver(function() {
+          isFlat = root.classList.contains('flat');
+        });
+        flatObserver.observe(root, { attributes: true, attributeFilter: ['class'] });
+        isFlat = root.classList.contains('flat');
+      })();
+    </script>
+
+    <!-- ====== 全局确认弹窗 ====== -->
+    <div class="confirm-modal-overlay" id="confirm-modal-overlay" style="display:none;">
+      <div class="confirm-modal">
+        <div class="confirm-modal-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="confirm-modal-message" id="confirm-modal-message"></div>
+        <div class="confirm-modal-actions">
+          <button type="button" class="confirm-modal-cancel" id="confirm-modal-cancel">取消</button>
+          <button type="button" class="confirm-modal-ok" id="confirm-modal-ok">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .confirm-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--lg-modal-overlay, rgba(15,15,30,0.40));
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        animation: confirmOverlayIn 0.25s ease;
+      }
+      @keyframes confirmOverlayIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      /* Base — iOS 27 液态玻璃：透镜折射 + 色散边缘 + 镜面高光 + 环境色染 */
+      .confirm-modal {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+        background:
+          radial-gradient(circle 240px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.20), transparent 55%),
+          linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.05) 100%),
+          var(--lg-modal-bg);
+        backdrop-filter: blur(var(--lg-blur-strong, 50px)) saturate(var(--lg-saturate, 220%));
+        -webkit-backdrop-filter: blur(var(--lg-blur-strong, 50px)) saturate(var(--lg-saturate, 220%));
+        border: 1px solid var(--lg-modal-border);
+        border-radius: 20px;
+        padding: 32px 28px 24px;
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+        box-shadow:
+          inset 1.5px 0 0.5px -0.5px var(--lg-chroma-r, rgba(255,40,80,0.04)),
+          inset -1.5px 0 0.5px -0.5px var(--lg-chroma-b, rgba(40,120,255,0.04)),
+          inset 0 1px 1px rgba(255,255,255,0.45),
+          inset 0 -1px 2px rgba(255,255,255,0.08),
+          0 24px 64px rgba(0,0,0,0.10),
+          0 4px 12px rgba(0,0,0,0.05);
+        animation: confirmModalIn 0.30s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      /* ::before — 镜面高光 + 透镜聚光（鼠标追踪） */
+      .confirm-modal::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background:
+          radial-gradient(ellipse 70% 50% at var(--mouse-x, 0%) var(--mouse-y, 0%),
+            rgba(255,255,255,0.28), transparent 60%),
+          radial-gradient(ellipse 60% 50% at 100% 100%,
+            rgba(255,255,255,0.10), transparent 40%);
+        opacity: var(--lg-highlight-opacity, 0.70);
+        pointer-events: none;
+        z-index: 1;
+      }
+      /* ::after — 环境色染 + 顶部镜面线 + 对角扫光 */
+      .confirm-modal::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background:
+          linear-gradient(90deg, transparent,
+            hsl(var(--brand-hue, 234) 90% 85% / 0.15) 20%,
+            var(--lg-highlight, rgba(255,255,255,0.35)) 50%,
+            hsl(calc(var(--brand-hue, 234) + 50) 90% 85% / 0.15) 80%,
+            transparent) top left / 100% 1px no-repeat,
+          linear-gradient(105deg, transparent 30%,
+            rgba(255,255,255,0.04) 43%,
+            var(--lg-sweep-color, rgba(255,255,255,0.20)) 50%,
+            rgba(255,255,255,0.04) 57%,
+            transparent 70%),
+          linear-gradient(135deg,
+            hsl(var(--brand-hue) 80% 70% / 0.05) 0%,
+            transparent 50%,
+            hsl(calc(var(--brand-hue) + 60) 80% 70% / 0.03) 100%);
+        background-size: 100% 1px, 250% 100%, 100% 100%;
+        background-position: 0 0, -150% 0, 0 0;
+        background-repeat: no-repeat;
+        opacity: var(--lg-highlight-opacity, 0.70);
+        animation: lg-gloss-flow 9s ease-in-out infinite;
+        pointer-events: none;
+        z-index: 2;
+      }
+      /* 内容层置于伪元素之上 */
+      .confirm-modal > * { position: relative; z-index: 3; }
+      /* 扁平模式 */
+      .flat .confirm-modal {
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        background: var(--surface, #fff);
+        border-color: var(--border, #e5e7eb);
+        box-shadow: 0 24px 64px rgba(0,0,0,0.12);
+      }
+      .flat .confirm-modal::before,
+      .flat .confirm-modal::after { display: none; }
+      /* 深色液态玻璃 */
+      .dark:not(.flat) .confirm-modal {
+        box-shadow:
+          0 24px 64px rgba(0,0,0,0.35),
+          0 4px 12px rgba(0,0,0,0.20),
+          inset 0 1px 1px rgba(255,255,255,0.08),
+          inset 0 -1px 2px rgba(255,255,255,0.03);
+      }
+      .dark:not(.flat) .confirm-modal::before {
+        opacity: var(--lg-highlight-opacity, 0.30);
+      }
+      .dark:not(.flat) .confirm-modal::after {
+        opacity: var(--lg-highlight-opacity, 0.30);
+      }
+      /* 深色扁平 */
+      .dark.flat .confirm-modal {
+        box-shadow: 0 24px 64px rgba(0,0,0,0.25);
+      }
+      @keyframes confirmModalIn {
+        from { opacity: 0; transform: scale(0.88) translateY(16px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .confirm-modal-icon {
+        color: var(--warning, #f59e0b);
+        margin-bottom: 14px;
+        display: flex;
+        justify-content: center;
+        position: relative;
+        z-index: 3;
+      }
+      .confirm-modal-icon svg {
+        filter: drop-shadow(0 2px 4px rgba(245,158,11,0.25));
+      }
+      .dark .confirm-modal-icon svg {
+        filter: drop-shadow(0 2px 4px rgba(245,158,11,0.35));
+      }
+      .confirm-modal-message {
+        font-size: 0.94rem;
+        color: var(--text-primary, #1a1a2e);
+        line-height: 1.6;
+        margin-bottom: 22px;
+        word-break: break-word;
+        position: relative;
+        z-index: 3;
+      }
+      .confirm-modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        position: relative;
+        z-index: 3;
+      }
+      .confirm-modal-actions button {
+        flex: 1;
+        max-width: 130px;
+        padding: 10px 18px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      /* 取消按钮 */
+      .confirm-modal-cancel {
+        background: rgba(128,128,128,0.08);
+        border-color: rgba(128,128,128,0.18);
+        color: var(--text-secondary, #666);
+      }
+      .confirm-modal-cancel:hover {
+        background: rgba(128,128,128,0.16);
+        border-color: rgba(128,128,128,0.28);
+        transform: translateY(-1px);
+      }
+      .confirm-modal-cancel:active {
+        transform: translateY(0);
+        background: rgba(128,128,128,0.12);
+      }
+      /* 确定（删除）按钮 */
+      .confirm-modal-ok {
+        background: rgba(239,68,68,0.10);
+        border-color: rgba(239,68,68,0.25);
+        color: #ef4444;
+      }
+      .confirm-modal-ok:hover {
+        background: rgba(239,68,68,0.18);
+        border-color: rgba(239,68,68,0.45);
+        box-shadow: 0 4px 14px rgba(239,68,68,0.25);
+        transform: translateY(-1px);
+      }
+      .confirm-modal-ok:active {
+        transform: translateY(0);
+        background: rgba(239,68,68,0.14);
+      }
+      /* 深色模式按钮 */
+      .dark .confirm-modal-cancel {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(255,255,255,0.10);
+        color: rgba(255,255,255,0.60);
+      }
+      .dark .confirm-modal-cancel:hover {
+        background: rgba(255,255,255,0.12);
+        border-color: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.75);
+      }
+      .dark .confirm-modal-ok {
+        background: rgba(248,113,113,0.10);
+        border-color: rgba(248,113,113,0.22);
+        color: #f87171;
+      }
+      .dark .confirm-modal-ok:hover {
+        background: rgba(248,113,113,0.20);
+        border-color: rgba(248,113,113,0.40);
+        box-shadow: 0 4px 14px rgba(248,113,113,0.30);
+      }
+      /* 扁平按钮微调 */
+      .flat .confirm-modal-cancel,
+      .flat .confirm-modal-ok {
+        border-radius: 10px;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      /* 响应式 */
+      @media (max-width: 480px) {
+        .confirm-modal {
+          padding: 24px 18px 18px;
+          max-width: 92vw;
+          border-radius: 18px;
+        }
+        .confirm-modal-actions button {
+          padding: 9px 14px;
+          font-size: 0.82rem;
+        }
+      }
+    </style>
+
+    <script is:inline data-astro-rerun>
+      // 全局确认弹窗 — 替代原生 confirm()
+      // data-astro-rerun：View Transitions 切换页面后 confirm-modal 元素会被替换，
+      // 此脚本需随之重新执行并重新获取元素引用，否则旧引用指向已脱离 DOM 的元素，
+      // 导致点击删除/取消等按钮时确认弹窗不显示（表现为「点击无反应」）。
+      (function() {
+        // 每次执行都实时获取元素，确保拿到当前 DOM 中有效的引用
+        function getEl(id) { return document.getElementById(id); }
+
+        function showConfirm(message, onConfirm, opts) {
+          var overlay = getEl('confirm-modal-overlay');
+          if (!overlay) {
+            // 降级到原生 confirm
+            if (window.confirm(message)) { onConfirm && onConfirm(); }
+            return;
+          }
+          var msgEl = getEl('confirm-modal-message');
+          var okBtn = getEl('confirm-modal-ok');
+          if (msgEl) msgEl.textContent = message;
+          // 可选：自定义确认按钮文本和颜色
+          if (opts && opts.okText && okBtn) okBtn.textContent = opts.okText;
+          else if (okBtn) okBtn.textContent = '确定';
+          // 在当前弹窗元素上暂存回调（每次打开重新读取，避免闭包引用过期元素）
+          overlay.__callback = onConfirm;
+          overlay.style.display = '';
+        }
+
+        function hideConfirm() {
+          var overlay = getEl('confirm-modal-overlay');
+          if (overlay) overlay.style.display = 'none';
+        }
+
+        var okBtn = getEl('confirm-modal-ok');
+        if (okBtn) {
+          okBtn.addEventListener('click', function() {
+            var overlay = getEl('confirm-modal-overlay');
+            var cb = overlay ? overlay.__callback : null;
+            hideConfirm();
+            if (cb) cb();
+          });
+        }
+        var cancelBtn = getEl('confirm-modal-cancel');
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', hideConfirm);
+        }
+        var overlay = getEl('confirm-modal-overlay');
+        if (overlay) {
+          overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) hideConfirm();
+          });
+        }
+        // ESC 关闭
+        document.addEventListener('keydown', function(e) {
+          var o = getEl('confirm-modal-overlay');
+          if (e.key === 'Escape' && o && o.style.display !== 'none') {
+            hideConfirm();
+          }
+        });
+
+        window.__showConfirm = showConfirm;
+      })();
+    </script>
+  </body>
+</html>

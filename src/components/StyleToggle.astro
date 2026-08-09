@@ -1,0 +1,72 @@
+---
+/**
+ * StyleToggle - 液态玻璃 / 普通平面模式切换
+ * - 渲染为 <button class="icon-btn">（圆形按钮，与 TopBar 其他按钮风格一致）
+ * - 切换 html.flat class
+ * - 同步 localStorage('glass-mode') 取值 'glass' | 'flat'
+ * - glass 模式显示水滴图标，flat 模式显示实心方块图标
+ * - 使用 is:inline 脚本，零水合
+ */
+---
+
+<button
+  type="button"
+  class="icon-btn style-toggle"
+  id="style-toggle"
+  aria-label="切换液态玻璃/平面模式"
+  title="切换视觉样式"
+>
+  <!-- 水滴图标（glass 模式显示） -->
+  <svg class="icon-drop" viewBox="0 0 24 24" stroke="currentColor" fill="none"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 3s6 7 6 11a6 6 0 1 1-12 0c0-4 6-11 6-11z" />
+    <path d="M9 14a3 3 0 0 0 3 3" />
+  </svg>
+  <!-- 实心方块图标（flat 模式显示） -->
+  <svg class="icon-flat" viewBox="0 0 24 24" stroke="currentColor" fill="none"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="4" y="4" width="16" height="16" rx="2.5" />
+    <path d="M4 10h16" />
+    <path d="M10 4v16" />
+  </svg>
+</button>
+
+<style>
+  .style-toggle {
+    position: relative;
+    overflow: hidden;
+  }
+  .style-toggle.spinning {
+    transform: rotate(180deg);
+  }
+  .icon-drop,
+  .icon-flat {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 18px;
+    height: 18px;
+    transition: opacity 0.25s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .icon-drop { opacity: 1; transform: scale(1) rotate(0); }
+  .icon-flat { opacity: 0; transform: scale(0.4) rotate(-60deg); }
+
+  :global(.flat) .icon-drop { opacity: 0; transform: scale(0.4) rotate(60deg); }
+  :global(.flat) .icon-flat { opacity: 1; transform: scale(1) rotate(0); }
+</style>
+
+<script is:inline>
+  (function () {
+    const btn = document.getElementById('style-toggle');
+    if (!btn) return;
+
+    btn.addEventListener('click', function () {
+      const isFlat = !document.documentElement.classList.contains('flat');
+      document.documentElement.classList.toggle('flat', isFlat);
+      try { localStorage.setItem('glass-mode', isFlat ? 'flat' : 'glass'); } catch (e) {}
+
+      btn.classList.add('spinning');
+      setTimeout(() => btn.classList.remove('spinning'), 450);
+    });
+  })();
+</script>

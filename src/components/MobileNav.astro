@@ -1,0 +1,264 @@
+---
+/**
+ * MobileNav - 移动端底部双胶囊导航
+ * - 固定在底部居中，移动端显示
+ * - 双胶囊设计：首页单独一个胶囊，其他四项（分类/搜索/标签/我的）在另一个胶囊
+ * - 分类/搜索/标签项触发底部弹出面板（action: panel:xxx）
+ * - is:inline 脚本处理点击时的 active 状态切换 + 面板触发
+ */
+import { siteConfig } from '../data/site';
+
+const homeItem = siteConfig.mobileNav.find((i) => i.href === '/')!;
+const groupItems = siteConfig.mobileNav.filter((i) => i.href !== '/');
+
+/** 返回内联 SVG（stroke-based 24x24） */
+function iconSvg(name: string): string {
+  switch (name) {
+    case 'home':
+      return '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>';
+    case 'archive':
+      return '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>';
+    case 'message':
+      return '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>';
+    case 'link':
+      return '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>';
+    case 'user':
+      return '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>';
+    case 'search':
+      return '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>';
+    case 'grid':
+      return '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>';
+    case 'tag':
+      return '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>';
+    case 'info':
+      return '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+    default:
+      return '<circle cx="12" cy="12" r="4"/>';
+  }
+}
+---
+
+<nav class="mobile-nav" role="navigation" aria-label="移动端导航">
+  <!-- 首页胶囊（独立） -->
+  <div class="nav-capsule nav-capsule-home">
+    <div class="nav-liquid-indicator"></div>
+    <a href={homeItem.href} class="nav-capsule-item active" data-nav={homeItem.icon} data-action={homeItem.action || ''}>
+      <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+           set:html={iconSvg(homeItem.icon)}></svg>
+      <span>{homeItem.label}</span>
+    </a>
+  </div>
+
+  <!-- 其他导航项胶囊 -->
+  <div class="nav-capsule nav-capsule-group">
+    <div class="nav-liquid-indicator"></div>
+    {groupItems.map((item) => (
+      <a
+        href={item.action ? 'javascript:void(0)' : item.href}
+        class="nav-capsule-item"
+        data-nav={item.icon}
+        data-action={item.action || ''}
+      >
+        <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+             set:html={iconSvg(item.icon)}></svg>
+        <span>{item.label}</span>
+      </a>
+    ))}
+  </div>
+</nav>
+
+<script is:inline>
+  (function () {
+    function getActiveKeyByPath(path) {
+      if (path.startsWith('/archive')) return 'archive';
+      if (path.startsWith('/message')) return 'message';
+      if (path.startsWith('/links')) return 'link';
+      if (path.startsWith('/about') || path.startsWith('/profile') || path.startsWith('/login') || path.startsWith('/my-')) return 'user';
+      if (path.startsWith('/blog') || path === '/') return 'home';
+      return 'home';
+    }
+
+    function initMobileNav() {
+      var nav = document.querySelector('.mobile-nav');
+      if (!nav) return;
+
+      // 清理旧的委托点击监听器，避免 View Transitions 后重复绑定
+      if (nav.__mobileNavClickHandler) {
+        nav.removeEventListener('click', nav.__mobileNavClickHandler);
+      }
+      if (nav.__overlayClickHandler) {
+        document.removeEventListener('click', nav.__overlayClickHandler);
+      }
+      if (nav.__resizeHandler) {
+        window.removeEventListener('resize', nav.__resizeHandler);
+      }
+
+      // 根据当前路径设置 active
+      var initialActive = getActiveKeyByPath(window.location.pathname);
+      nav.querySelectorAll('.nav-capsule-item').forEach(function (it) {
+        it.classList.toggle('active', it.getAttribute('data-nav') === initialActive);
+      });
+
+      // ===== 液态流动指示器 =====
+      // 从内联 transform 中可靠地提取当前 translateX
+      function getIndicatorX(ind) {
+        var t = ind.style.transform || '';
+        var m = t.match(/translateX\(\s*(-?[\d.]+)px\s*\)/);
+        return m ? parseFloat(m[1]) : null;
+      }
+
+      function moveLiquidIndicator(item, animate) {
+        if (!item) return;
+        var capsule = item.closest('.nav-capsule');
+        if (!capsule) return;
+        var indicator = capsule.querySelector('.nav-liquid-indicator');
+        if (!indicator) return;
+        nav.querySelectorAll('.nav-liquid-indicator').forEach(function (ind) {
+          if (ind !== indicator) ind.style.opacity = '0';
+        });
+        var itemRect = item.getBoundingClientRect();
+        var capsuleRect = capsule.getBoundingClientRect();
+        var left = itemRect.left - capsuleRect.left;
+        var width = itemRect.width;
+
+        if (animate) {
+          // 当前水滴的位置/宽度（圆心对齐）
+          var startX = getIndicatorX(indicator);
+          var startLeft = startX === null ? left : startX;
+          var startWidth = parseFloat(indicator.style.width) || width;
+          var startCenter = startLeft + startWidth * 0.5;
+          var endCenter = left + width * 0.5;
+          var travel = Math.abs(endCenter - startCenter);
+          var duration = Math.max(0.4, Math.min(0.7, 0.3 + travel / 450));
+
+          // ① 先把当前胶囊「吸」成一滴水滴，并轻微向目标方向倾斜
+          var shift = travel > 4 ? (endCenter > startCenter ? 5 : -5) : 0;
+          indicator.style.transition = 'all 0.3s cubic-bezier(0.6, 0.05, 0.28, 1)';
+          indicator.style.transform = 'translateX(' + (startLeft + shift) + 'px) scaleY(1.16) scaleX(0.24)';
+          indicator.style.width = '13px';
+          indicator.style.borderRadius = '50% 50% 50% 50% / 62% 62% 38% 38%';
+          indicator.style.opacity = '1';
+
+          // ② 水滴「飞」向目标中心，途中拉长成流动的水珠
+          setTimeout(function() {
+            var midWidth = Math.min(30, 16 + travel * 0.12);
+            indicator.style.transition = 'all ' + duration + 's cubic-bezier(0.34, 1.56, 0.64, 1)';
+            indicator.style.transform = 'translateX(' + (endCenter - midWidth * 0.5) + 'px) scaleY(0.8) scaleX(1)';
+            indicator.style.width = midWidth + 'px';
+            indicator.style.borderRadius = '40% 40% 40% 40% / 58% 58% 42% 42%';
+          }, 280);
+
+          // ③ 在目标位置展开成完整胶囊
+          setTimeout(function() {
+            indicator.style.transition = 'all 0.42s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            indicator.style.transform = 'translateX(' + left + 'px) scaleY(1) scaleX(1)';
+            indicator.style.width = width + 'px';
+            indicator.style.borderRadius = '';
+          }, 280 + duration * 1000);
+        } else {
+          indicator.style.transition = 'none';
+          indicator.style.transform = 'translateX(' + left + 'px) scaleY(1) scaleX(1)';
+          indicator.style.width = width + 'px';
+          indicator.style.borderRadius = '';
+          indicator.style.opacity = '1';
+        }
+      }
+
+      function refreshLiquidIndicator() {
+        requestAnimationFrame(function () {
+          moveLiquidIndicator(nav.querySelector('.nav-capsule-item.active'), false);
+        });
+      }
+      refreshLiquidIndicator();
+
+      var resizeHandler = function () { requestAnimationFrame(refreshLiquidIndicator); };
+      nav.__resizeHandler = resizeHandler;
+      window.addEventListener('resize', resizeHandler);
+
+      // 点击事件委托到 nav，避免每个 item 单独绑定且在 View Transitions 后失效
+      function clickHandler(e) {
+        var item = e.target.closest('.nav-capsule-item');
+        if (!item) return;
+        var navKey = item.getAttribute('data-nav');
+        var action = item.getAttribute('data-action');
+
+        if (action && action.indexOf('panel:') === 0) {
+          e.preventDefault();
+          var panelName = action.replace('panel:', '');
+          if (window.openMobilePanel) window.openMobilePanel(panelName);
+          var parentCapsule = item.closest('.nav-capsule');
+          if (parentCapsule) {
+            parentCapsule.querySelectorAll('.nav-capsule-item').forEach(function (it) { it.classList.remove('active'); });
+          }
+          item.classList.add('active');
+          moveLiquidIndicator(item, true);
+          return;
+        }
+        if (action === 'search') {
+          e.preventDefault();
+          if (window.openMobilePanel) window.openMobilePanel('search');
+          return;
+        }
+
+        var parentCapsule = item.closest('.nav-capsule');
+        if (parentCapsule) {
+          parentCapsule.querySelectorAll('.nav-capsule-item').forEach(function (it) { it.classList.remove('active'); });
+        }
+        if (navKey === 'home') {
+          var groupCapsule = nav.querySelector('.nav-capsule-group');
+          if (groupCapsule) {
+            groupCapsule.querySelectorAll('.nav-capsule-item').forEach(function (it) { it.classList.remove('active'); });
+          }
+        }
+        if (parentCapsule && parentCapsule.classList.contains('nav-capsule-group') && navKey !== 'search') {
+          var homeCapsule = nav.querySelector('.nav-capsule-home');
+          if (homeCapsule) {
+            homeCapsule.querySelectorAll('.nav-capsule-item').forEach(function (it) { it.classList.remove('active'); });
+          }
+        }
+        item.classList.add('active');
+        moveLiquidIndicator(item, true);
+      }
+      nav.__mobileNavClickHandler = clickHandler;
+      nav.addEventListener('click', clickHandler);
+
+      // 面板关闭时校正 active
+      function overlayClickHandler(e) {
+        var overlay = document.getElementById('mobile-panel-overlay');
+        if (overlay && e.target === overlay) {
+          var groupCapsule = nav.querySelector('.nav-capsule-group');
+          if (groupCapsule) {
+            var path = window.location.pathname;
+            groupCapsule.querySelectorAll('.nav-capsule-item').forEach(function (it) {
+              var action = it.getAttribute('data-action');
+              if (!action || action.indexOf('panel:') !== 0) {
+                var href = it.getAttribute('href');
+                if (href && path.startsWith(href)) it.classList.add('active');
+                else it.classList.remove('active');
+              } else {
+                it.classList.remove('active');
+              }
+            });
+            if (path === '/' || path === '') {
+              var homeItem = nav.querySelector('.nav-capsule-home .nav-capsule-item');
+              if (homeItem) homeItem.classList.add('active');
+            }
+          }
+          refreshLiquidIndicator();
+        }
+      }
+      nav.__overlayClickHandler = overlayClickHandler;
+      document.addEventListener('click', overlayClickHandler);
+    }
+
+    window.__initMobileNav = initMobileNav;
+    initMobileNav();
+
+    // Astro View Transitions 页面切换完成后重新初始化
+    document.addEventListener('astro:page-load', function () {
+      if (window.__initMobileNav) window.__initMobileNav();
+    });
+  })();
+</script>

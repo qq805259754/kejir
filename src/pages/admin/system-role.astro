@@ -1,0 +1,374 @@
+---
+/**
+ * 系统管理 - 角色管理 - /admin/system-role
+ * 角色列表、搜索、新增/编辑（弹窗）、批量删除
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="角色管理" description="角色管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>角色管理</h1>
+      <p class="page-sub">管理系统角色，配置角色编码与权限状态</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label>角色名称</label>
+        <input type="text" class="glass-input" id="search-name" placeholder="请输入角色名称" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增角色
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+    var selectedIds = [];
+    var lastList = [];
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'name', title: '角色名称',
+        render: function (row) {
+          return '<span style="font-weight:600;">' + Admin.esc(row.name) + '</span>';
+        }
+      },
+      {
+        key: 'code', title: '角色编码',
+        render: function (row) {
+          return '<code style="font-size:0.8rem;background:var(--brand-a08);padding:2px 8px;border-radius:6px;">' + Admin.esc(row.code) + '</code>';
+        }
+      },
+      {
+        key: 'remarks', title: '备注',
+        render: function (row) {
+          return '<span style="color:var(--text-tertiary);">' + Admin.esc(row.remarks || '-') + '</span>';
+        }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '150px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.formatDate(row.createTime, true) + '</span>';
+        }
+      },
+      {
+        key: 'actions', title: '操作', width: '210px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('修改', 'act-edit', null, row.id) +
+            Admin.actBtn('权限', 'act-perm', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== CRUD 列表工厂 =====
+    var crud = Admin.createCrudList({
+      container: tableContainer,
+      paginationEl: paginationContainer,
+      columns: columns,
+      listApi: function (params) {
+        return Admin.api.get('/sys/role/', params).then(function (data) {
+          lastList = Admin.getPageRecords(data).list;
+          return data;
+        });
+      },
+      deleteApi: function (id) { return Admin.api.del('/sys/role/delete/' + id); },
+      deleteLabel: function (row) { return row.name || ('ID:' + row.id); },
+      emptyText: '暂无角色数据',
+      onSelectionChange: function (ids) { selectedIds = ids; },
+    });
+
+    // ===== 搜索 =====
+    function getSearchParams() {
+      return {
+        name: document.getElementById('search-name').value.trim(),
+      };
+    }
+    function doSearch() { crud.search(getSearchParams()); }
+    function doReset() {
+      document.getElementById('search-name').value = '';
+      crud.search({});
+    }
+
+    // ===== 新增/编辑弹窗 =====
+    function openRoleModal(row) {
+      var isEdit = !!row;
+      var body =
+        '<form id="edit-form">' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>角色名称 <span class="req">*</span></label>' +
+              '<input type="text" class="glass-input" name="name" placeholder="请输入角色名称" required />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>角色编码 <span class="req">*</span></label>' +
+              '<input type="text" class="glass-input" name="code" placeholder="请输入角色编码" required />' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>备注</label>' +
+            '<textarea class="glass-input" name="remarks" placeholder="请输入备注信息"></textarea>' +
+          '</div>' +
+        '</form>';
+
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>';
+
+      Admin.openModal({
+        title: isEdit ? '编辑角色' : '新增角色',
+        body: body,
+        footer: footer,
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          if (isEdit) {
+            Admin.fillForm(form, row);
+          }
+          modal.querySelector('#btn-save').addEventListener('click', function () {
+            var data = Admin.serializeForm(form);
+            if (!data.name) { Admin.toast('请输入角色名称', 'error'); return; }
+            if (!data.code) { Admin.toast('请输入角色编码', 'error'); return; }
+
+            if (isEdit) {
+              data.id = row.id;
+            }
+            var promise = isEdit
+              ? Admin.api.put('/sys/role/', data)
+              : Admin.api.post('/sys/role/', data);
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              crud.refresh();
+            }).catch(function (err) {
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // ===== 菜单树数据（用于权限分配） =====
+    var menuTreeData = [];
+    function loadMenuTree() {
+      return Admin.api.get('/sys/menu/tree').then(function (data) {
+        menuTreeData = Array.isArray(data) ? data : (data && data.records) || (data && data.list) || [];
+      }).catch(function () { menuTreeData = []; });
+    }
+
+    // ===== 权限分配弹窗 =====
+    var currentTreeApi = null;
+    function openPermissionModal(row) {
+      var body =
+        '<div class="admin-form-group">' +
+          '<label>角色名称</label>' +
+          '<input type="text" class="glass-input" value="' + Admin.esc(row.name || '') + '" disabled />' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>权限设置</label>' +
+          '<div class="admin-tree-scroll" id="perm-tree"></div>' +
+        '</div>';
+
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save-perm">保存权限</button>';
+
+      Admin.openModal({
+        title: '分配权限',
+        body: body,
+        footer: footer,
+        width: '600px',
+        onOpen: function (modal) {
+          var treeContainer = modal.querySelector('#perm-tree');
+          // 渲染菜单树（带 checkbox，默认展开）
+          Admin.renderTree({
+            container: treeContainer,
+            data: menuTreeData,
+            checkbox: true,
+            defaultExpand: true,
+            checkedIds: [],
+            getIcon: function (node) { return getIconSvg(node.icon); },
+          });
+          currentTreeApi = treeContainer._treeApi;
+          // 加载当前角色已分配的菜单 ID 并勾选
+          Admin.api.get('/sys/role/menus/' + row.id).then(function (ids) {
+            var arr = Array.isArray(ids) ? ids : (ids && ids.records) || [];
+            setTreeChecked(treeContainer, arr);
+          }).catch(function () {});
+          modal.querySelector('#btn-save-perm').addEventListener('click', function () {
+            var checkedIds = getTreeChecked(treeContainer);
+            var btn = this;
+            btn.disabled = true;
+            Admin.api.put('/sys/role/menus/' + row.id, checkedIds).then(function () {
+              Admin.toast('权限设置成功', 'success');
+              Admin.closeModal();
+            }).catch(function (err) {
+              btn.disabled = false;
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // 勾选树节点（按 id）
+    function setTreeChecked(container, ids) {
+      var set = {};
+      ids.forEach(function (id) { set[String(id)] = true; });
+      container.querySelectorAll('.admin-tree-checkbox').forEach(function (cb) {
+        cb.checked = !!set[String(cb.value)];
+      });
+    }
+    // 获取所有勾选的 id（含半选父节点的处理：取所有 checked 的叶子与父）
+    function getTreeChecked(container) {
+      var ids = [];
+      container.querySelectorAll('.admin-tree-checkbox:checked').forEach(function (cb) {
+        ids.push(cb.value);
+      });
+      return ids;
+    }
+
+    // Element Plus 图标名 → SVG（菜单树/图标列复用）
+    var iconSvgMap = {
+      'Document': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+      'PriceTag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+      'Dessert': '<path d="M12 2a8 8 0 0 0-8 8c0 4 3 6 3 10h10c0-4 3-6 3-10a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/>',
+      'ChatDotRound': '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><circle cx="12" cy="12" r="1"/>',
+      'Setting': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'User': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      'Menu': '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+      'Histogram': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+      'Link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      'Message': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      'Edit': '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+      'Delete': '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      'View': '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+      'Refresh': '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+      'Folder': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+      'Operation': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'Picture': '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+      'Bell': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+      'Tree': '<path d="M12 2l3 6h-2v4h4v-2l6 3-6 3v-2h-4v4h2l-3 6-3-6h2v-4H7v2l-6-3 6-3v-2h4V8h-2z"/>',
+      'Files': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+      'Monitor': '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+      'Tools': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+      'Cpu': '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+      'Clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      'Connection': '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+      'Code': '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+      'List': '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+    };
+    function getIconSvg(name) {
+      if (!name) return '';
+      var n = name.charAt(0).toUpperCase() + name.slice(1);
+      var path = iconSvgMap[n] || iconSvgMap[name];
+      if (!path) return '';
+      return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>';
+    }
+
+    // ===== 根据 ID 查找行数据 =====
+    function findRowById(id) {
+      for (var i = 0; i < lastList.length; i++) {
+        if (String(lastList[i].id) === String(id)) return lastList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () {
+      openRoleModal(null);
+    });
+    document.getElementById('btn-batch-del').addEventListener('click', function () {
+      crud.batchDelete(selectedIds);
+    });
+
+    // 表格操作事件委托（修改/权限/删除）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openRoleModal(row);
+      } else if (btn.classList.contains('act-perm')) {
+        var permRow = findRowById(id);
+        if (permRow) openPermissionModal(permRow);
+      } else if (btn.classList.contains('act-del')) {
+        var delRow = findRowById(id);
+        var label = delRow ? delRow.name : '该角色';
+        Admin.confirm('确定要删除「' + label + '」吗？', function () {
+          Admin.api.del('/sys/role/delete/' + id).then(function () {
+            Admin.toast('删除成功', 'success');
+            crud.refresh();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+    });
+
+    // 回车搜索
+    document.getElementById('search-name').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // ===== 初始化 =====
+    loadMenuTree();
+    crud.load();
+    }
+  })();
+</script>

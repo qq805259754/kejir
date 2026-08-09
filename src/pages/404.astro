@@ -1,0 +1,73 @@
+---
+/**
+ * 404 页面 - 页面未找到
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="页面未找到" description="404 - 页面未找到">
+  <div class="content-zone">
+    <div class="not-found-wrap">
+      <div class="not-found-code">404</div>
+      <h1>页面未找到</h1>
+      <p>抱歉，你访问的页面不存在或已被移动</p>
+      <div class="not-found-actions">
+        <a href="/" class="glass-btn glass-btn-primary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          返回首页
+        </a>
+        <a href="/archive" class="glass-btn glass-btn-ghost">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="21 8 21 21 3 21 3 8"/>
+            <rect x="1" y="3" width="22" height="5"/>
+            <line x1="10" y1="12" x2="14" y2="12"/>
+          </svg>
+          浏览归档
+        </a>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .not-found-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    flex: 1;
+    padding: var(--sp-10) var(--sp-4);
+  }
+  .not-found-code {
+    font-size: clamp(5rem, 15vw, 8rem);
+    font-weight: 900;
+    background: var(--text-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+    margin-bottom: var(--sp-4);
+    letter-spacing: -0.05em;
+  }
+  .not-found-wrap h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 var(--sp-3);
+    color: var(--text-primary);
+  }
+  .not-found-wrap p {
+    color: var(--text-tertiary);
+    margin-bottom: var(--sp-6);
+    font-size: 0.95rem;
+  }
+  .not-found-actions {
+    display: flex;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+</style>

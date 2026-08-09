@@ -1,0 +1,394 @@
+---
+/**
+ * 登录页 - /login
+ * - showSidePanel={false} 隐藏右侧栏
+ * - 居中玻璃卡片
+ * - 简洁苹果风格
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="登录" description="用户登录">
+  <div class="content-zone login-content-zone">
+    <div class="login-wrapper">
+      <div class="login-card glass-card">
+        <!-- 顶部品牌区 -->
+        <div class="auth-header">
+          <div class="auth-logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <h2 class="auth-title">欢迎回来</h2>
+          <p class="auth-subtitle">登录以继续访问</p>
+        </div>
+
+        <!-- 登录表单 -->
+        <form id="login-form" class="auth-form">
+          <div class="form-group">
+            <label for="login-username">用户名 / 邮箱</label>
+            <div class="auth-input-wrap">
+              <svg class="auth-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <input id="login-username" type="text" name="username" placeholder="请输入用户名或邮箱" autocomplete="username" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="login-password">密码</label>
+            <div class="auth-input-wrap">
+              <svg class="auth-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <input id="login-password" type="password" name="password" placeholder="请输入密码" autocomplete="current-password" required />
+            </div>
+          </div>
+
+          <div class="auth-option-row">
+            <label class="auth-checkbox-label">
+              <input type="checkbox" name="remember" />
+              <span class="auth-checkbox-box"></span>
+              记住我
+            </label>
+            <a href="/change-password" class="auth-forgot-link">忘记密码？</a>
+          </div>
+
+          <button type="submit" class="glass-btn glass-btn-primary auth-submit-btn">登 录</button>
+          <p id="login-error" class="auth-error" style="display:none;"></p>
+        </form>
+
+        <!-- 底部注册链接 -->
+        <div class="auth-footer">
+          <span>还没有账号？</span>
+          <a href="/register" class="auth-register-link">立即注册</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .login-content-zone {
+    justify-content: center;
+    align-items: center;
+  }
+
+  .login-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    flex: 1;
+    padding: var(--sp-4);
+  }
+
+  .login-card {
+    max-width: 420px;
+    width: 100%;
+    padding: var(--sp-8);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .auth-header {
+    text-align: center;
+    margin-bottom: var(--sp-6);
+  }
+  .auth-logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+    background: var(--accent-gradient);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    margin-bottom: var(--sp-4);
+    box-shadow: 0 8px 24px var(--accent-shadow);
+    position: relative;
+  }
+  .auth-logo::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 24px;
+    background: var(--accent-gradient);
+    opacity: 0.2;
+    z-index: -1;
+    filter: blur(12px);
+  }
+  .auth-logo svg {
+    width: 28px;
+    height: 28px;
+  }
+  .auth-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--sp-2);
+    letter-spacing: -0.01em;
+  }
+  .auth-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+    margin: 0;
+  }
+
+  .auth-form .form-group {
+    margin-bottom: var(--sp-4);
+  }
+  .auth-form .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+  }
+
+  .auth-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .auth-input-icon {
+    position: absolute;
+    left: 14px;
+    width: 18px;
+    height: 18px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+    transition: color var(--dur-fast);
+    z-index: 1;
+  }
+  .auth-form input[type="text"],
+  .auth-form input[type="email"],
+  .auth-form input[type="password"] {
+    width: 100%;
+    padding: 12px 14px 12px 42px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all var(--dur-fast) var(--ease-spring);
+    outline: none;
+    box-sizing: border-box;
+  }
+  .flat .auth-form input[type="text"],
+  .flat .auth-form input[type="email"],
+  .flat .auth-form input[type="password"] {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .auth-form input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-a15);
+    background: var(--glass-bg-strong);
+  }
+  .auth-input-wrap:focus-within .auth-input-icon {
+    color: var(--brand);
+  }
+  .auth-form input::placeholder {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    opacity: 0.7;
+  }
+
+  .auth-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-5);
+    padding: 0 2px;
+  }
+  .auth-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    margin: 0;
+    font-weight: 500;
+  }
+  .auth-checkbox-label input[type="checkbox"] {
+    position: absolute !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    pointer-events: none !important;
+  }
+  .auth-checkbox-box {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 1.5px solid var(--glass-border);
+    background: var(--glass-bg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--dur-fast) var(--ease-spring);
+    flex-shrink: 0;
+  }
+  .auth-checkbox-label:hover .auth-checkbox-box {
+    border-color: var(--brand);
+  }
+  .auth-checkbox-label input:checked + .auth-checkbox-box {
+    background: var(--accent-gradient);
+    border-color: transparent;
+    box-shadow: 0 2px 6px var(--accent-shadow);
+  }
+  .auth-checkbox-label input:checked + .auth-checkbox-box::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .auth-forgot-link {
+    font-size: 0.82rem;
+    color: var(--brand);
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity var(--dur-fast);
+  }
+  .auth-forgot-link:hover { opacity: 0.8; text-decoration: underline; text-underline-offset: 3px; }
+
+  .auth-submit-btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--sp-1);
+    font-size: 0.95rem;
+    padding: 12px 0;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    border-radius: var(--r-md);
+    min-height: 46px;
+  }
+
+  .auth-error {
+    margin-top: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-md);
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    border: 1px solid rgba(239, 68, 68, 0.15);
+  }
+
+  .auth-footer {
+    text-align: center;
+    margin-top: var(--sp-5);
+    padding-top: var(--sp-4);
+    border-top: 1px solid var(--glass-border-subtle);
+    font-size: 0.85rem;
+    color: var(--text-tertiary);
+  }
+  .auth-register-link {
+    color: var(--brand);
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 4px;
+    transition: opacity var(--dur-fast);
+  }
+  .auth-register-link:hover { opacity: 0.8; text-decoration: underline; text-underline-offset: 3px; }
+
+  @media (max-width: 640px) {
+    .login-wrapper { padding: var(--sp-4) 0; }
+    .login-card {
+      width: 100%;
+      max-width: 100%;
+      padding: var(--sp-6) var(--sp-4);
+      border-radius: var(--r-lg);
+      animation: authCardIn 0.45s var(--ease-spring) both;
+    }
+  }
+
+  @keyframes authCardIn {
+    from { opacity: 0; transform: translateY(18px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    var form = document.getElementById('login-form');
+    var errorEl = document.getElementById('login-error');
+
+    function showError(msg) {
+      if (!errorEl) return;
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+    function hideError() {
+      if (errorEl) errorEl.style.display = 'none';
+    }
+
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideError();
+        var data = new FormData(form);
+        var username = data.get('username');
+        var password = data.get('password');
+        if (!username || !password) {
+          showError('请输入用户名和密码');
+          return;
+        }
+
+        // 调用 /auth/login 接口登录
+        if (window.__api && typeof window.__api.login === 'function') {
+          var submitBtn = form.querySelector('.auth-submit-btn');
+          if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '登录中...'; }
+          // 上送数据格式：nickname 留空，source 为 PC
+          var loginData = {
+            nickname: '',
+            password: password,
+            source: 'PC',
+            username: username
+          };
+          window.__api.login(loginData).then(function(res) {
+            if (res && res.token) {
+              localStorage.setItem('token', res.token);
+              // res 本身就是 data 对象，含 avatar/nickname/username 等字段
+              var user = {
+                id: res.id,
+                username: res.username || username,
+                nickname: res.nickname || res.username || username,
+                avatar: res.avatar || res.avatarUrl || ''
+              };
+              localStorage.setItem('user', JSON.stringify(user));
+              // 通知全局用户状态更新（TopBar 头像、评论区等）
+              document.dispatchEvent(new Event('user:updated'));
+              // 跳转到来源页或首页：仅允许同源相对路径，防开放重定向钓鱼
+              var redirect = new URLSearchParams(window.location.search).get('redirect') || '/';
+              if (!/^(\/[^/]|\/$)/.test(redirect)) redirect = '/';
+              window.location.href = redirect;
+            } else {
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登 录'; }
+              showError('登录失败：未获取到 token，请检查用户名和密码');
+            }
+          }).catch(function(err) {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '登 录'; }
+            var msg = '登录失败，请检查用户名和密码';
+            if (err && err.message) msg = err.message;
+            showError(msg);
+          });
+        } else {
+          showError('系统未就绪，请稍后重试');
+        }
+      });
+    }
+  })();
+</script>

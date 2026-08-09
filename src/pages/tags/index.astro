@@ -1,0 +1,39 @@
+---
+/**
+ * 标签云页 - /tags
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAllTags } from '../../data/posts';
+
+const tags = getAllTags();
+const maxCount = Math.max(...tags.map((t) => t.count), 1);
+
+function tagSize(count: number): number {
+  const ratio = count / maxCount;
+  if (ratio > 0.75) return 5;
+  if (ratio > 0.55) return 4;
+  if (ratio > 0.35) return 3;
+  if (ratio > 0.15) return 2;
+  return 1;
+}
+---
+
+<BaseLayout title="标签云" description="所有标签">
+  <div class="content-zone">
+      <div class="page-hero">
+        <h1>标签云</h1>
+        <p>通过标签快速发现感兴趣的内容</p>
+      </div>
+
+      <div class="glass-card" data-reveal>
+        <div class="tag-cloud-page">
+          {tags.map((t) => (
+            <a href={`/tags/${encodeURIComponent(t.name)}`} class={`tag-size-${tagSize(t.count)}`}>
+              #{t.name}
+              <span class="tag-count">{t.count}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+</BaseLayout>

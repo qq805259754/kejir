@@ -1,0 +1,40 @@
+---
+/**
+ * MiniPostCard - 右侧列表区小卡片
+ * Props:
+ *   slug, title, excerpt?, date, category?, categoryColor?
+ * 结构：
+ *   a.mini-post-card href=/article/{slug}
+ *     - .mini-post-card-head : 左 .tag 分类标签 / 右 .date 日期
+ *     - h4 标题（2行截断）
+ *     - .excerpt 摘要（单行截断，可选）
+ *
+ * 样式全部在 global.css 中（.mini-post-card 系列），不使用 scoped style。
+ */
+interface Props {
+  slug: string;
+  title: string;
+  excerpt?: string;
+  date: string | Date;
+  category?: string;
+  /** 分类颜色 class，例如 'tag-primary' */
+  categoryClass?: string;
+}
+
+const { slug, title, excerpt, date, category, categoryClass = '' } = Astro.props as Props;
+
+const d = date instanceof Date ? date : new Date(date);
+const pad = (n: number) => String(n).padStart(2, '0');
+const dateStr = `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+
+const href = `/article/${slug}`;
+---
+
+<a href={href} class="mini-post-card">
+  <div class="mini-post-card-head">
+    {category ? <span class={`tag ${categoryClass}`}>{category}</span> : <span></span>}
+    <span class="date">{dateStr}</span>
+  </div>
+  <h4>{title}</h4>
+  {excerpt && <p class="excerpt">{excerpt}</p>}
+</a>

@@ -1,0 +1,122 @@
+---
+/**
+ * HotArticleCard - 侧栏热门文章卡片
+ * Props:
+ *   rank  : 1-3 数字，决定徽章渐变颜色
+ *   title : 标题
+ *   views?: 阅读量
+ *   slug? : 文章 slug
+ *
+ * 第 1 名：金-橙渐变
+ * 第 2 名：银灰渐变
+ * 第 3 名：铜棕渐变
+ * 其他：灰色
+ */
+interface Props {
+  rank: number;
+  title: string;
+  views?: number | string;
+  slug?: string;
+}
+
+const { rank, title, views = 999, slug } = Astro.props;
+
+const rankClass =
+  rank === 1 ? 'rank-gold' :
+  rank === 2 ? 'rank-silver' :
+  rank === 3 ? 'rank-bronze' : 'rank-default';
+
+const href = slug ? `/article/${slug}` : 'javascript:void(0)';
+---
+
+<a href={href} class="hot-article-card" data-reveal>
+  <span class={`rank-badge ${rankClass}`}>{rank}</span>
+  <div class="hot-info">
+    <h5 class="hot-title">{title}</h5>
+    <span class="hot-views">{views} 阅读</span>
+  </div>
+</a>
+
+<style>
+  .hot-article-card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-md);
+    margin-bottom: var(--sp-3);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border-subtle);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    transition: all var(--dur-fast) var(--ease-out);
+    cursor: pointer;
+    color: inherit;
+  }
+  .hot-article-card:last-child { margin-bottom: 0; }
+  .hot-article-card:hover {
+    background: var(--glass-bg-strong);
+    transform: translateX(3px);
+    border-color: var(--glass-border);
+  }
+  .hot-article-card:hover .hot-title { color: var(--brand); }
+
+  .rank-badge {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--r-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: white;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .rank-gold {
+    background: linear-gradient(135deg, #FFD700, #FF8C00);
+  }
+  .rank-silver {
+    background: linear-gradient(135deg, #E0E0E0, #9E9E9E);
+  }
+  .rank-bronze {
+    background: linear-gradient(135deg, #CD7F32, #8B4513);
+  }
+  .rank-default {
+    background: var(--glass-bg-subtle);
+    color: var(--text-tertiary);
+    border: 1px solid var(--glass-border-subtle);
+    box-shadow: none;
+  }
+
+  .hot-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .hot-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.45;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .hot-views {
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+</style>

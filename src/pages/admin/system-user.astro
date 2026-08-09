@@ -1,0 +1,492 @@
+---
+/**
+ * 系统管理 - 用户管理 - /admin/system-user
+ * 用户列表、搜索、新增/编辑（弹窗）、重置密码、批量删除
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="用户管理" description="用户管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>用户管理</h1>
+      <p class="page-sub">管理系统用户账号，支持新增、编辑、删除及密码重置</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label>用户名</label>
+        <input type="text" class="glass-input" id="search-nickname" placeholder="请输入用户名" />
+      </div>
+      <div class="admin-search-field">
+        <label>登录方式</label>
+        <select class="glass-input" id="search-loginType">
+          <option value="">全部</option>
+        </select>
+      </div>
+      <div class="admin-search-field">
+        <label>状态</label>
+        <select class="glass-input" id="search-status">
+          <option value="">全部</option>
+          <option value="1">启用</option>
+          <option value="0">禁用</option>
+        </select>
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增用户
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+    var selectedIds = [];
+    var lastList = [];
+
+    // ===== 登录方式映射 =====
+    var loginTypeMap = {
+      0: { label: '邮箱', type: 'info' },
+      1: { label: 'QQ', type: 'warning' },
+      2: { label: 'Gitee', type: 'success' },
+      3: { label: 'Github', type: 'default' },
+    };
+    function renderLoginType(val) {
+      var item = loginTypeMap[val];
+      if (!item) return '<span style="color:var(--text-tertiary);">-</span>';
+      return Admin.badge(item.label, item.type);
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'avatar', title: '头像', width: '60px', align: 'center',
+        render: function (row) {
+          var initial = Admin.esc((row.nickname || row.username || '?').charAt(0).toUpperCase());
+          var fallback = '<div style="width:32px;height:32px;border-radius:50%;background:var(--brand-a15);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:600;margin:0 auto;">' + initial + '</div>';
+          if (!row.avatar) return fallback;
+          return '<img src="' + Admin.esc(row.avatar) + '" alt="头像" style="width:32px;height:32px;border-radius:5px;object-fit:cover;display:block;margin:0 auto;" onerror="this.outerHTML=\'' + fallback.replace(/"/g, '&quot;') + '\'" />';
+        }
+      },
+      { key: 'nickname', title: '昵称' },
+      {
+        key: 'loginType', title: '登录方式', width: '90px', align: 'center',
+        render: function (row) { return renderLoginType(row.loginType); }
+      },
+      {
+        key: 'ip', title: '登录IP', width: '120px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.esc(row.ip || '-') + '</span>';
+        }
+      },
+      { key: 'ipLocation', title: '登录地址', width: '120px',
+        render: function (row) { return Admin.esc(row.ipLocation || '-'); }
+      },
+      {
+        key: 'status', title: '状态', align: 'center', width: '80px',
+        render: function (row) {
+          return row.status == 1 ? Admin.badge('启用', 'success') : Admin.badge('禁用', 'danger');
+        }
+      },
+      {
+        key: 'lastLoginTime', title: '最后登录时间', width: '150px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.formatDate(row.lastLoginTime, true) + '</span>';
+        }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '150px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.formatDate(row.createTime, true) + '</span>';
+        }
+      },
+      {
+        key: 'actions', title: '操作', width: '260px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('编辑', 'act-edit', null, row.id) +
+            Admin.actBtn('重置密码', 'act-reset', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== CRUD 列表工厂 =====
+    var crud = Admin.createCrudList({
+      container: tableContainer,
+      paginationEl: paginationContainer,
+      columns: columns,
+      listApi: function (params) {
+        return Admin.api.get('/sys/user', params).then(function (data) {
+          lastList = Admin.getPageRecords(data).list;
+          return data;
+        });
+      },
+      deleteApi: function (id) { return Admin.api.del('/sys/user/delete/' + id); },
+      deleteLabel: function (row) { return row.nickname || row.username || ('ID:' + row.id); },
+      emptyText: '暂无用户数据',
+      onSelectionChange: function (ids) { selectedIds = ids; },
+    });
+
+    // ===== 搜索 =====
+    function getSearchParams() {
+      return {
+        nickname: document.getElementById('search-nickname').value.trim(),
+        status: document.getElementById('search-status').value,
+        loginType: document.getElementById('search-loginType').value,
+      };
+    }
+    function doSearch() { crud.search(getSearchParams()); }
+    function doReset() {
+      document.getElementById('search-nickname').value = '';
+      document.getElementById('search-status').value = '';
+      document.getElementById('search-loginType').value = '';
+      crud.search({});
+    }
+
+    // ===== 加载登录方式下拉选项 =====
+    function loadLoginTypeOptions() {
+      var select = document.getElementById('search-loginType');
+      Admin.api.get('/sys/dictData/getDiceData/login_type').then(function (data) {
+        var list = Array.isArray(data) ? data : (data && data.records) || (data && data.list) || [];
+        list.forEach(function (item) {
+          var value = item.dictValue != null ? item.dictValue : item.value;
+          var label = item.dictLabel || item.label || item.name || value;
+          var option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          select.appendChild(option);
+        });
+      }).catch(function () {
+        // 失败时使用内置映射兜底
+        var fallback = [
+          { value: '0', label: '邮箱' },
+          { value: '1', label: 'QQ' },
+          { value: '2', label: 'Gitee' },
+          { value: '3', label: 'Github' },
+        ];
+        fallback.forEach(function (item) {
+          var option = document.createElement('option');
+          option.value = item.value;
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+      });
+    }
+
+    // ===== 角色选项缓存 =====
+    var roleOptions = [];
+    function loadRoleOptions(callback) {
+      if (roleOptions.length > 0) { callback && callback(roleOptions); return; }
+      Admin.api.get('/sys/role/all').then(function (data) {
+        roleOptions = Array.isArray(data) ? data : (data && data.records ? data.records : []);
+        callback && callback(roleOptions);
+      }).catch(function () { callback && callback([]); });
+    }
+
+    // ===== 新增/编辑弹窗 =====
+    function openUserModal(row) {
+      var isEdit = !!row;
+      var passwordGroup = isEdit ? '' :
+        '<div class="admin-form-group">' +
+          '<label>密码 <span class="req">*</span></label>' +
+          '<input type="password" class="glass-input" name="password" placeholder="请输入密码（至少 6 位）" required minlength="6" />' +
+        '</div>';
+
+      var body =
+        '<form id="edit-form">' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>用户名 <span class="req">*</span></label>' +
+              '<input type="text" class="glass-input" name="username" placeholder="请输入用户名" ' + (isEdit ? 'disabled' : 'required') + ' />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>昵称 <span class="req">*</span></label>' +
+              '<input type="text" class="glass-input" name="nickname" placeholder="请输入昵称" required />' +
+            '</div>' +
+          '</div>' +
+          passwordGroup +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>手机号</label>' +
+              '<input type="text" class="glass-input" name="mobile" placeholder="请输入手机号" />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>邮箱</label>' +
+              '<input type="email" class="glass-input" name="email" placeholder="请输入邮箱" />' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>性别</label>' +
+              '<select class="glass-input" name="sex" data-type="number">' +
+                '<option value="0">保密</option>' +
+                '<option value="1">男</option>' +
+                '<option value="2">女</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>状态 <span class="req">*</span></label>' +
+              '<div class="admin-radio-group" id="status-radio-group">' +
+                '<label><input type="radio" name="status" value="1" checked /> 启用</label>' +
+                '<label><input type="radio" name="status" value="0" /> 禁用</label>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>角色 <span class="req">*</span></label>' +
+            '<select class="glass-input" name="roleId" id="role-select" style="width:100%;">' +
+              '<option value="">请选择角色</option>' +
+            '</select>' +
+          '</div>' +
+        '</form>';
+
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>';
+
+      Admin.openModal({
+        title: isEdit ? '编辑用户' : '新增用户',
+        body: body,
+        footer: footer,
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          var roleSelect = modal.querySelector('#role-select');
+
+          // 渲染角色下拉框
+          loadRoleOptions(function (roles) {
+            var html = '<option value="">请选择角色</option>';
+            roles.forEach(function (r) {
+              html += '<option value="' + Admin.esc(r.id) + '">' + Admin.esc(r.name) + '</option>';
+            });
+            roleSelect.innerHTML = html;
+
+            // 编辑模式回填角色
+            if (isEdit && row.roleIds && row.roleIds.length > 0) {
+              roleSelect.value = String(row.roleIds[0]);
+            }
+          });
+
+          // 回填表单其他字段
+          if (isEdit) {
+            var usernameInput = form.querySelector('[name="username"]');
+            if (usernameInput) { usernameInput.value = row.username || ''; }
+            var fields = ['nickname', 'mobile', 'email', 'sex'];
+            fields.forEach(function (f) {
+              var el = form.querySelector('[name="' + f + '"]');
+              if (el && row[f] !== undefined) {
+                if (el.tagName === 'SELECT') {
+                  el.value = String(row[f]);
+                } else {
+                  el.value = row[f] || '';
+                }
+              }
+            });
+            // 回填状态单选按钮
+            var statusRadios = form.querySelectorAll('[name="status"]');
+            statusRadios.forEach(function (r) {
+              if (String(r.value) === String(row.status != null ? row.status : 1)) {
+                r.checked = true;
+              }
+            });
+          }
+
+          modal.querySelector('#btn-save').addEventListener('click', function () {
+            var data = Admin.serializeForm(form);
+            var selectedRoleId = roleSelect.value;
+
+            // 必填校验
+            if (!data.username) { Admin.toast('请输入用户名', 'error'); return; }
+            if (!data.nickname) { Admin.toast('请输入昵称', 'error'); return; }
+            if (!isEdit && !data.password) { Admin.toast('请输入密码', 'error'); return; }
+            if (!isEdit && data.password && data.password.length < 6) { Admin.toast('密码长度至少为 6 位', 'error'); return; }
+            if (!selectedRoleId) { Admin.toast('请选择角色', 'error'); return; }
+
+            // 构建后端期望的数据格式
+            var payload = {
+              user: {
+                username: data.username,
+                nickname: data.nickname,
+                mobile: data.mobile || '',
+                email: data.email || '',
+                sex: data.sex != null ? Number(data.sex) : 0,
+                status: data.status != null ? Number(data.status) : 1,
+              },
+              roleIds: [Number(selectedRoleId)],
+            };
+            if (isEdit) {
+              payload.user.id = row.id;
+            } else {
+              payload.user.password = data.password;
+            }
+
+            var promise;
+            if (isEdit) {
+              promise = Admin.api.put('/sys/user', payload);
+            } else {
+              promise = Admin.api.post('/sys/user', payload);
+            }
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              crud.refresh();
+            }).catch(function (err) {
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // ===== 重置密码弹窗 =====
+    function openResetModal(row) {
+      var body =
+        '<form id="reset-form">' +
+          '<div class="admin-form-group">' +
+            '<label>用户名</label>' +
+            '<input type="text" class="glass-input" value="' + Admin.esc(row.username || '') + '" disabled />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>新密码 <span class="req">*</span></label>' +
+            '<input type="password" class="glass-input" name="password" id="reset-password" placeholder="请输入新密码（至少 6 位）" required minlength="6" autocomplete="new-password" />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>确认密码 <span class="req">*</span></label>' +
+            '<input type="password" class="glass-input" name="confirmPassword" id="reset-confirm-password" placeholder="请再次输入新密码" required minlength="6" autocomplete="new-password" />' +
+          '</div>' +
+        '</form>';
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-reset-pwd">确认重置</button>';
+
+      Admin.openModal({
+        title: '重置密码 — ' + Admin.esc(row.nickname || row.username || ''),
+        body: body,
+        footer: footer,
+        onOpen: function (modal) {
+          modal.querySelector('#btn-reset-pwd').addEventListener('click', function () {
+            var form = modal.querySelector('#reset-form');
+            var password = form.querySelector('#reset-password').value;
+            var confirmPassword = form.querySelector('#reset-confirm-password').value;
+
+            if (!password) { Admin.toast('请输入新密码', 'error'); return; }
+            if (password.length < 6) { Admin.toast('密码长度至少为 6 位', 'error'); return; }
+            if (!confirmPassword) { Admin.toast('请确认新密码', 'error'); return; }
+            if (password !== confirmPassword) { Admin.toast('两次输入的密码不一致', 'error'); return; }
+
+            var payload = {
+              id: row.id,
+              password: password
+            };
+            Admin.api.put('/sys/user/reset', payload).then(function () {
+              Admin.toast('密码重置成功', 'success');
+              Admin.closeModal();
+            }).catch(function (err) {
+              Admin.toast(err.message || '重置失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // ===== 根据 ID 查找行数据 =====
+    function findRowById(id) {
+      for (var i = 0; i < lastList.length; i++) {
+        if (String(lastList[i].id) === String(id)) return lastList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () {
+      openUserModal(null);
+    });
+    document.getElementById('btn-batch-del').addEventListener('click', function () {
+      crud.batchDelete(selectedIds);
+    });
+
+    // 表格操作事件委托（编辑/重置密码/删除）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openUserModal(row);
+      } else if (btn.classList.contains('act-reset')) {
+        var resetRow = findRowById(id);
+        if (resetRow) openResetModal(resetRow);
+      } else if (btn.classList.contains('act-del')) {
+        var delRow = findRowById(id);
+        var label = delRow ? (delRow.nickname || delRow.username) : '该用户';
+        Admin.confirm('确定要删除「' + label + '」吗？此操作不可逆。', function () {
+          Admin.api.del('/sys/user/delete/' + id).then(function () {
+            Admin.toast('删除成功', 'success');
+            crud.refresh();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+    });
+
+    // 回车搜索
+    document.getElementById('search-nickname').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // ===== 初始化 =====
+    loadLoginTypeOptions();
+    crud.load();
+    }
+  })();
+</script>

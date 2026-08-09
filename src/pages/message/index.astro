@@ -1,0 +1,369 @@
+---
+/**
+ * 留言板 - /message
+ * 数据来源：GET /api/message/list
+ * 字段：id, nickname, avatar, content, createTime
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="留言板" description="欢迎留下你的想法" currentPath="/message">
+  <div class="content-zone">
+    <div class="page-header">
+      <h1>留言板</h1>
+      <span class="page-sub">欢迎留下你的想法</span>
+    </div>
+
+    <!-- 留言表单 -->
+    <form class="message-input-box glass-card" id="message-form">
+      <div class="message-form-row" id="msg-name-row">
+        <input type="text" id="msg-name" class="glass-input" placeholder="你的昵称" maxlength="20" required />
+      </div>
+      <!-- 登录用户展示：登录后隐藏昵称输入框，直接展示登录昵称 -->
+      <div class="msg-logged-user" id="msg-logged-user" style="display:none;">
+        <img id="msg-logged-avatar" src="" alt="" />
+        <span>以 <strong id="msg-logged-nick"></strong> 的身份留言</span>
+      </div>
+      <textarea id="msg-content" placeholder="说点什么吧..." required minlength="2" maxlength="500"></textarea>
+      <div class="message-form-actions">
+        <span class="message-form-tip" id="msg-tip">所有留言都会在后端审核后展示</span>
+        <button type="submit" class="glass-btn glass-btn-primary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          提交留言
+        </button>
+      </div>
+    </form>
+
+    <!-- 留言列表 -->
+    <div class="main-section-label">最新留言</div>
+    <!-- 加载中 -->
+    <div id="msg-loading" class="loading-wrap">
+      <div class="spinner"></div>
+      <span>加载留言中...</span>
+    </div>
+    <!-- 留言列表容器（由 JS 填充） -->
+    <div class="message-list" id="message-list" style="display:none;"></div>
+    <!-- 空状态 -->
+    <div id="msg-empty" class="glass-card empty-card" style="display:none;">
+      <p>还没有留言，快来抢沙发吧</p>
+    </div>
+    <!-- 加载失败 -->
+    <div id="msg-error" class="glass-card empty-card" style="display:none;">
+      <p>留言加载失败，请稍后刷新重试</p>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .message-input-box {
+    padding: var(--sp-5);
+    margin-bottom: var(--sp-6);
+    /* 覆盖 glass-card 的 overflow:hidden，避免表单内容被截断 */
+    overflow: visible;
+  }
+  .message-form-row {
+    margin-bottom: var(--sp-3);
+  }
+  .message-form-row .glass-input {
+    display: block;
+    width: 100%;
+    max-width: 240px;
+  }
+  /* 登录用户留言身份展示 */
+  .msg-logged-user {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--r-md);
+    background: var(--lg-bg-subtle);
+    border: 1px solid var(--lg-border-subtle);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .msg-logged-user img {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .msg-logged-user strong {
+    color: var(--brand);
+    font-weight: 600;
+  }
+
+  .message-input-box textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: var(--sp-3);
+    border-radius: var(--r-md);
+    border: 1px solid var(--glass-border-subtle);
+    background: var(--glass-bg-subtle);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+    outline: none;
+    margin-bottom: var(--sp-3);
+    line-height: 1.6;
+    transition: all var(--dur-fast) var(--ease-out);
+    box-sizing: border-box;
+  }
+  .message-input-box textarea:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-a15);
+    background: var(--glass-bg);
+  }
+
+  .message-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    flex-wrap: wrap;
+  }
+  .message-form-tip {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+  }
+
+  .message-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding-bottom: var(--sp-4);
+  }
+
+  /* 头像支持图片 */
+  .message-avatar img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .empty-card {
+    padding: var(--sp-6);
+    text-align: center;
+    color: var(--text-tertiary);
+  }
+  .empty-card p { margin: 0; font-size: 0.9rem; }
+
+  .loading-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-3);
+    padding: var(--sp-6);
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    function escHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
+    }
+
+    function formatDate(d) {
+      if (!d) return '';
+      // 截取到分钟，去掉秒
+      var s = String(d);
+      if (s.length > 16) s = s.slice(0, 16);
+      return s;
+    }
+
+    function getAvatarChar(name) {
+      return name ? name.charAt(0).toUpperCase() : '匿';
+    }
+
+    function randomColor() {
+      var colors = ['#667eea', '#f093fb', '#43e97b', '#fa709a', '#4facfe', '#f5576c', '#a18cd1', '#fbc2eb'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    // 构建单条留言 HTML（支持 URL 头像与首字母回退）
+    function buildMessageItem(m) {
+      var name = m.nickname || m.name || '匿名';
+      var content = m.content || m.message || '';
+      var date = formatDate(m.createTime || m.date);
+      var avatar = m.avatar || '';
+      var color = randomColor();
+      var avatarHtml;
+      if (avatar) {
+        // 有头像 URL：用 img，加载失败回退首字母
+        avatarHtml = '<div class="message-avatar" style="background:linear-gradient(135deg,' + color + ',' + color + 'dd);">'
+          + '<img src="' + escHtml(avatar) + '" alt="' + escHtml(name) + '" onerror="this.style.display=\'none\';this.parentNode.setAttribute(\'data-fallback\',\'1\');this.parentNode.innerHTML=this.parentNode.getAttribute(\'data-char\');" data-char="' + escHtml(getAvatarChar(name)) + '" />'
+          + '</div>';
+      } else {
+        avatarHtml = '<div class="message-avatar" style="background:linear-gradient(135deg,' + color + ',' + color + 'dd);">' + escHtml(getAvatarChar(name)) + '</div>';
+      }
+      return '<div class="message-item">' + avatarHtml
+        + '<div class="message-body">'
+        + '<div class="message-head"><b>' + escHtml(name) + '</b><span>' + escHtml(date) + '</span></div>'
+        + '<p>' + escHtml(content) + '</p>'
+        + '</div></div>';
+    }
+
+    var list = document.getElementById('message-list');
+    var loadingEl = document.getElementById('msg-loading');
+    var emptyEl = document.getElementById('msg-empty');
+    var errorEl = document.getElementById('msg-error');
+    var tip = document.getElementById('msg-tip');
+
+    function showState(state) {
+      // state: 'loading' | 'list' | 'empty' | 'error'
+      if (loadingEl) loadingEl.style.display = state === 'loading' ? 'flex' : 'none';
+      if (list) list.style.display = state === 'list' ? 'flex' : 'none';
+      if (emptyEl) emptyEl.style.display = state === 'empty' ? '' : 'none';
+      if (errorEl) errorEl.style.display = state === 'error' ? '' : 'none';
+    }
+
+    // 从接口加载留言
+    function loadMessages() {
+      showState('loading');
+      if (!window.__api || typeof window.__api.getMessages !== 'function') {
+        showState('error');
+        return;
+      }
+      window.__api.getMessages().then(function(data) {
+        if (!data || !Array.isArray(data) || !data.length) {
+          showState('empty');
+          return;
+        }
+        if (list) {
+          list.innerHTML = '';
+          data.forEach(function(m) {
+            var item = document.createElement('div');
+            item.innerHTML = buildMessageItem(m);
+            list.appendChild(item.firstChild);
+          });
+        }
+        showState('list');
+      }).catch(function() {
+        showState('error');
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadMessages);
+    } else {
+      loadMessages();
+    }
+
+    // 登录用户直接使用登录昵称：隐藏昵称输入框，展示登录用户信息
+    function initNameField() {
+      var nameRow = document.getElementById('msg-name-row');
+      var nameInput = document.getElementById('msg-name');
+      var loggedBox = document.getElementById('msg-logged-user');
+      var loggedAvatar = document.getElementById('msg-logged-avatar');
+      var loggedNick = document.getElementById('msg-logged-nick');
+      var user = null;
+      try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (err) {}
+      if (user && user.nickname) {
+        // 已登录：隐藏输入框，填充隐藏值供提交使用，展示登录用户信息
+        if (nameRow) nameRow.style.display = 'none';
+        if (nameInput) { nameInput.value = user.nickname; nameInput.required = false; }
+        if (loggedNick) loggedNick.textContent = user.nickname;
+        if (loggedAvatar && user.avatar) loggedAvatar.src = user.avatar;
+        if (loggedBox) loggedBox.style.display = '';
+      }
+    }
+    initNameField();
+
+    // 留言表单提交：调用 POST /api/message/add
+    // 字段：avatar（头像）、nickname（登录昵称，没有用游客）、content（留言内容）、status:1
+    var form = document.getElementById('message-form');
+    var submitBtn = document.getElementById('msg-submit') || (form ? form.querySelector('button[type="submit"]') : null);
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var nameInput = document.getElementById('msg-name');
+        var contentInput = document.getElementById('msg-content');
+        var content = contentInput ? contentInput.value.trim() : '';
+        if (!content) return;
+
+        // 获取当前登录用户信息：已登录用登录昵称和头像，未登录用表单输入或"游客"+ dicebear 头像
+        var user = null;
+        try { user = JSON.parse(localStorage.getItem('user') || 'null'); } catch (err) {}
+        var nickname, avatar;
+        if (user && user.nickname) {
+          nickname = user.nickname;
+          avatar = user.avatar || '';
+        } else {
+          nickname = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : '游客';
+          // 优先使用本地确定性头像（零外部依赖、国内访问不报错）；配置了非 dicebear 地址时才走外部源
+          var dbb = window.__DICE_BEAR_BASE__ || '';
+          if (window.__genAvatar && (!dbb || dbb.indexOf('local:') === 0 || /dicebear\.com/i.test(dbb))) {
+            avatar = window.__genAvatar(nickname);
+          } else {
+            avatar = (dbb || 'https://api.dicebear.com/7.x/avataaars/svg?seed=') + encodeURIComponent(nickname);
+          }
+        }
+
+        // 按钮置为提交中
+        var origText = submitBtn ? submitBtn.textContent : '';
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '提交中...'; }
+
+        if (!window.__api || typeof window.__api.addMessage !== 'function') {
+          if (tip) { tip.textContent = '接口不可用，请稍后重试'; tip.style.color = 'var(--danger, #ef4444)'; }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+          return;
+        }
+
+        window.__api.addMessage({
+          avatar: avatar,
+          nickname: nickname,
+          content: content,
+          status: 1
+        }).then(function(res) {
+          if (res === true || res === 1) {
+            // 提交成功：本地追加到列表顶部（乐观更新）
+            if (list) {
+              var item = document.createElement('div');
+              item.className = 'message-item';
+              item.style.animation = 'slideUp 0.4s var(--ease-spring) both';
+              item.innerHTML = buildMessageItem({
+                nickname: nickname,
+                content: content,
+                createTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                avatar: avatar
+              });
+              if (list.firstChild) {
+                list.insertBefore(item, list.firstChild);
+              } else {
+                list.appendChild(item);
+              }
+              showState('list');
+            }
+            // 清空表单
+            if (contentInput) contentInput.value = '';
+            if (tip) {
+              tip.textContent = '留言提交成功，感谢你的参与！';
+              tip.style.color = 'var(--success)';
+              setTimeout(function() {
+                tip.textContent = '所有留言都会在后端审核后展示';
+                tip.style.color = '';
+              }, 3000);
+            }
+          } else {
+            if (tip) { tip.textContent = '留言提交失败，请稍后重试'; tip.style.color = 'var(--danger, #ef4444)'; }
+          }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+        }).catch(function(err) {
+          // 透传后端业务错误 message
+          var msg = (err && err.message) ? err.message : '留言提交失败，请检查网络后重试';
+          if (tip) { tip.textContent = msg; tip.style.color = 'var(--danger, #ef4444)'; }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = origText; }
+        });
+      });
+    }
+  })();
+</script>

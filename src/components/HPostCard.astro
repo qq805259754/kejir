@@ -1,0 +1,43 @@
+---
+/**
+ * HPostCard - 横向文章卡片（左方图cover，右标题+副标题+元信息+收藏按钮）
+ * 用于 SidePanel 侧栏推荐列表
+ * Props:
+ *   - slug, title, excerpt?, date, category?
+ *   - c1, c2: 封面渐变起止颜色（CSS 颜色值）
+ */
+interface Props {
+  slug: string;
+  title: string;
+  excerpt?: string;
+  date: string | Date;
+  category?: string;
+  c1?: string;
+  c2?: string;
+}
+
+const { slug, title, excerpt, date, category, c1 = '#667eea', c2 = '#764ba2' } = Astro.props as Props;
+
+const d = date instanceof Date ? date : new Date(date);
+const pad = (n: number) => String(n).padStart(2, '0');
+const dateStr = `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+
+const href = `/article/${slug}`;
+---
+
+<a href={href} class="h-post-card" style={`--c1:${c1};--c2:${c2};`}>
+  <div class="h-post-cover"></div>
+  <div class="h-post-info">
+    <h4>{title}</h4>
+    <div class="meta">
+      {category && <span class="h-post-cat">{category}</span>}
+      {category && <span class="dot-sep">·</span>}
+      <span>{dateStr}</span>
+    </div>
+  </div>
+  <button class="h-post-fav" type="button" aria-label="收藏" title="收藏">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+  </button>
+</a>

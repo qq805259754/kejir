@@ -1,0 +1,74 @@
+---
+/**
+ * 分类文章列表 - /category/[id]
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getPostsByCategory, formatDate } from '../../data/posts';
+
+// 按需 SSR 渲染，支持任意分类
+export const prerender = false;
+
+const { id } = Astro.params;
+const name = id || '';
+const posts = id ? getPostsByCategory(id) : [];
+const count = posts.length;
+---
+
+<BaseLayout title={`${name} - 分类`} description={`分类 ${name} 下的文章`}>
+  <div class="content-zone">
+      <div class="page-hero">
+        <div class="cat-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          {name}
+        </div>
+        <h1>{name}</h1>
+        <p>共 {count} 篇相关文章</p>
+      </div>
+
+      {posts.length > 0 ? (
+        <div class="article-list">
+          {posts.map((post, i) => (
+            <a class="article-item" href={`/article/${post.slug}`} data-reveal style={`animation-delay:${i * 0.05}s;`}>
+              <div class="article-meta">
+                <span>{formatDate(post.date)}</span>
+                <span class="dot-sep">·</span>
+                <span class="h-post-cat">{post.category}</span>
+              </div>
+              <div class="article-title">{post.title}</div>
+              <div class="article-excerpt">{post.excerpt}</div>
+              <div class="article-footer">
+                <div class="article-tags">
+                  {post.tags.map((t) => (<span class="tag">{t}</span>))}
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div class="glass-card" data-reveal style="text-align:center;padding:var(--sp-10);">
+          <h3>该分类下暂无文章</h3>
+          <p style="color:var(--text-tertiary);">去其他分类看看吧</p>
+          <a href="/categories" class="glass-btn glass-btn-primary" style="margin-top:var(--sp-4);display:inline-flex;">查看所有分类</a>
+        </div>
+      )}
+    </div>
+</BaseLayout>
+
+<style>
+  .cat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    border: 1px solid var(--glass-border);
+    color: var(--brand);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: var(--sp-3);
+  }
+  .cat-badge svg { width: 14px; height: 14px; }
+  .flat .cat-badge { backdrop-filter: none; background: var(--bg-secondary); }
+</style>

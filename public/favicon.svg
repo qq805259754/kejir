@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2563eb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0f2fe;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Outer circle with gradient -->
+  <circle cx="32" cy="32" r="30" fill="url(#bgGrad)" />
+  <!-- Inner decorative ring -->
+  <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
+  <!-- Tech dots representing data nodes -->
+  <circle cx="14" cy="20" r="1.5" fill="rgba(255,255,255,0.4)" />
+  <circle cx="50" cy="18" r="1" fill="rgba(255,255,255,0.3)" />
+  <circle cx="48" cy="48" r="1.5" fill="rgba(255,255,255,0.4)" />
+  <circle cx="16" cy="46" r="1" fill="rgba(255,255,255,0.3)" />
+  <!-- Connection lines -->
+  <line x1="14" y1="20" x2="32" y2="32" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" />
+  <line x1="50" y1="18" x2="32" y2="32" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" />
+  <line x1="48" y1="48" x2="32" y2="32" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" />
+  <line x1="16" y1="46" x2="32" y2="32" stroke="rgba(255,255,255,0.15)" stroke-width="0.5" />
+  <!-- Abstract "热" character representation - stylized fire/heat symbol -->
+  <g filter="url(#glow)">
+    <!-- Left radical 扌(hand) simplified as a vertical stroke with dot -->
+    <rect x="20" y="18" width="3" height="26" rx="1.5" fill="url(#textGrad)" opacity="0.95"/>
+    <rect x="16" y="24" width="7" height="3" rx="1.5" fill="url(#textGrad)" opacity="0.95" transform="rotate(-25, 19.5, 25.5)"/>
+    <!-- Right component 埶 simplified as geometric flame shapes -->
+    <path d="M32 16 Q36 22 34 28 Q32 34 36 38 Q40 42 36 46 Q32 48 30 44 Q28 40 30 34 Q32 28 30 22 Q28 18 32 16 Z" fill="url(#textGrad)" opacity="0.9"/>
+    <!-- Inner heat accent -->
+    <path d="M38 24 Q40 30 38 36 Q36 42 40 44" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  </g>
+  <!-- Small pulse dot at center -->
+  <circle cx="32" cy="32" r="2" fill="#fbbf24" opacity="0.8">
+    <animate attributeName="r" values="2;3;2" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.8;0.4;0.8" dur="2s" repeatCount="indefinite"/>
+  </circle>
+</svg>

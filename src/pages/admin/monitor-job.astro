@@ -1,0 +1,427 @@
+---
+/**
+ * 管理后台 - 监控中心 - 定时任务 - /admin/monitor-job
+ * API: GET    /monitor/job/list?pageNum&pageSize&jobName&jobGroup&status
+ *      POST   /monitor/job/add
+ *      PUT    /monitor/job/update
+ *      DELETE /monitor/job/delete/{ids}（支持批量逗号分隔）
+ *      PUT    /monitor/job/changeStatus  （body: {id, status}）
+ *      PUT    /monitor/job/run           （body: {id}）— 立即执行一次
+ *      GET    /monitor/job/{id}          （详情，可选）
+ * 操作：新增 / 编辑 / 删除 / 状态切换(暂停-运行) / 立即执行
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="定时任务" description="定时任务管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>定时任务</h1>
+      <p class="page-sub">管理定时调度任务，支持新增、编辑、状态切换和立即执行</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-job-name">任务名称</label>
+        <input class="glass-input" id="search-job-name" type="text" placeholder="请输入任务名称" />
+      </div>
+      <div class="admin-search-field">
+        <label for="search-job-group">任务分组</label>
+        <select class="glass-input" id="search-job-group">
+          <option value="">全部分组</option>
+          <option value="DEFAULT">默认</option>
+          <option value="SYSTEM">系统</option>
+        </select>
+      </div>
+      <div class="admin-search-field">
+        <label for="search-status">状态</label>
+        <select class="glass-input" id="search-status">
+          <option value="">全部状态</option>
+          <option value="0">正常</option>
+          <option value="1">暂停</option>
+        </select>
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset" type="button">重置</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增任务
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+      var tableContainer = document.getElementById('table-container');
+      var paginationContainer = document.getElementById('pagination-container');
+      var inputJobName = document.getElementById('search-job-name');
+      var selJobGroup = document.getElementById('search-job-group');
+      var selStatus = document.getElementById('search-status');
+      var btnSearch = document.getElementById('btn-search');
+      var btnReset = document.getElementById('btn-reset');
+      var btnRefresh = document.getElementById('btn-refresh');
+      var btnAdd = document.getElementById('btn-add');
+      var btnBatchDel = document.getElementById('btn-batch-del');
+
+      // ===== 登录检查 =====
+      if (!Admin.isLoggedIn()) {
+        location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+        return;
+      }
+
+      var state = {
+        pageNum: 1,
+        pageSize: 10,
+        total: 0,
+        loading: false,
+        selectedIds: [],
+        lastList: [],
+        query: { jobName: '', jobGroup: '', status: '' },
+      };
+
+      // ===== 状态徽章：0 正常 / 1 暂停 =====
+      function statusBadge(val) {
+        var s = Number(val);
+        if (s === 0) return Admin.badge('正常', 'success');
+        if (s === 1) return Admin.badge('暂停', 'warning');
+        return Admin.badge('未知', 'default');
+      }
+
+      // ===== 工具：单行截断 =====
+      function ellipsis(text, max) {
+        var s = text == null ? '' : String(text);
+        return '<div style="max-width:' + (max || 240) + 'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + Admin.esc(s) + '">' + Admin.esc(s) + '</div>';
+      }
+
+      // ===== 任务组名格式化（DEFAULT→默认 / SYSTEM→系统） =====
+      var jobGroupMap = { DEFAULT: '默认', SYSTEM: '系统' };
+      function jobGroupLabel(val) {
+        return jobGroupMap[val] || val || '-';
+      }
+
+      // ===== 列配置（字段对齐参考后台：jobId / jobName / jobGroup / invokeTarget / cronExpression / status） =====
+      var columns = [
+        { type: 'checkbox' },
+        { title: '任务编号', align: 'center', width: '80px', render: function (row) { return Admin.esc(row.jobId != null ? row.jobId : '-'); } },
+        { title: '任务名称', render: function (row) { return '<span style="font-weight:600;">' + Admin.esc(row.jobName || '-') + '</span>'; } },
+        { title: '任务组名', align: 'center', width: '90px', render: function (row) { return Admin.esc(jobGroupLabel(row.jobGroup)); } },
+        { title: '调用目标字符串', render: function (row) { return ellipsis(row.invokeTarget, 220); } },
+        { title: 'cron执行表达式', render: function (row) {
+            return '<code style="font-family:var(--font-mono,monospace);font-size:0.82rem;background:var(--lg-bg-subtle,var(--surface));padding:2px 8px;border-radius:6px;">' + Admin.esc(row.cronExpression || '-') + '</code>';
+          } },
+        { title: '状态', align: 'center', width: '80px', render: function (row) {
+            var s = Number(row.status);
+            var checked = s === 0 ? 'checked' : '';
+            return '<label class="admin-switch" data-action="toggle-status" data-id="' + Admin.esc(row.jobId) + '">' +
+              '<input type="checkbox" ' + checked + ' />' +
+              '<span class="admin-switch-slider"></span></label>';
+          } },
+        { title: '操作', align: 'center', width: '150px', render: function (row) {
+            return '<span class="col-actions">' +
+              '<button type="button" class="act-edit" data-action="edit" data-id="' + Admin.esc(row.jobId) + '">修改</button>' +
+              '<button type="button" class="act-del" data-action="delete" data-id="' + Admin.esc(row.jobId) + '">删除</button>' +
+              '</span>';
+          } },
+      ];
+
+      // ===== 加载列表 =====
+      function loadList() {
+        if (state.loading) return;
+        state.loading = true;
+        Admin.showLoading(tableContainer);
+        var params = {
+          pageNum: state.pageNum,
+          pageSize: state.pageSize,
+        };
+        if (state.query.jobName) params.jobName = state.query.jobName;
+        if (state.query.jobGroup) params.jobGroup = state.query.jobGroup;
+        if (state.query.status !== '') params.status = state.query.status;
+        Admin.api.get('/monitor/job/list', params).then(function (data) {
+          state.loading = false;
+          var page = Admin.getPageRecords(data);
+          if (page.list.length === 0 && state.pageNum > 1) {
+            var tp = Math.ceil(page.total / state.pageSize) || 1;
+            state.pageNum = Math.min(state.pageNum - 1, tp);
+            if (state.pageNum < 1) state.pageNum = 1;
+            return loadList();
+          }
+          state.total = page.total;
+          state.lastList = page.list;
+          renderTableData(page.list);
+          renderPager();
+        }).catch(function (err) {
+          state.loading = false;
+          Admin.showError(tableContainer, err.message);
+        });
+      }
+
+      function renderTableData(list) {
+        Admin.renderTable(tableContainer, columns, list, {
+          emptyText: '暂无定时任务',
+          onSelectionChange: function (ids) { state.selectedIds = ids; },
+        });
+      }
+
+      function renderPager() {
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          },
+        });
+      }
+
+      // ===== 搜索 / 重置 =====
+      function doSearch() {
+        state.query.jobName = (inputJobName.value || '').trim();
+        state.query.jobGroup = selJobGroup.value;
+        state.query.status = selStatus.value;
+        state.pageNum = 1;
+        loadList();
+      }
+      function doReset() {
+        inputJobName.value = '';
+        selJobGroup.value = '';
+        selStatus.value = '';
+        state.query = { jobName: '', jobGroup: '', status: '' };
+        state.pageNum = 1;
+        loadList();
+      }
+
+      // ===== 切换状态（暂停/恢复） =====
+      // newStatus 为目标状态：'0' 正常 / '1' 暂停（与参考后台 changeStatus 接口 {jobId, status} 一致）
+      function toggleStatus(id, newStatus) {
+        Admin.api.put('/monitor/job/changeStatus', { jobId: id, status: newStatus }).then(function () {
+          Admin.toast(newStatus === '0' ? '已恢复运行' : '已暂停', 'success');
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '操作失败', 'error');
+          loadList();
+        });
+      }
+
+      // ===== 删除（单条） =====
+      function handleDelete(id) {
+        Admin.confirm('确定要删除该定时任务吗？', function () {
+          Admin.api.del('/monitor/job/delete/' + encodeURIComponent(id)).then(function () {
+            Admin.toast('删除成功', 'success');
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 批量删除 =====
+      function handleBatchDelete() {
+        var ids = state.selectedIds;
+        if (!ids || ids.length === 0) {
+          Admin.toast('请先选择要删除的任务', 'info');
+          return;
+        }
+        Admin.confirm('确定要删除选中的 ' + ids.length + ' 个任务吗？', function () {
+          Admin.api.del('/monitor/job/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+            Admin.toast('批量删除成功', 'success');
+            state.selectedIds = [];
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '批量删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 根据 ID 查找行数据 =====
+      function findRowByJobId(id) {
+        for (var i = 0; i < state.lastList.length; i++) {
+          if (String(state.lastList[i].jobId) === String(id)) return state.lastList[i];
+        }
+        return null;
+      }
+
+      // ===== 新增/编辑弹窗 =====
+      function openJobModal(row) {
+        var isEdit = !!row;
+        var body =
+          '<form id="edit-form">' +
+            '<div class="admin-form-group">' +
+              '<label>任务名称 <span class="req">*</span></label>' +
+              '<input type="text" name="jobName" class="glass-input" placeholder="请输入任务名称" required />' +
+            '</div>' +
+            '<div class="admin-form-row">' +
+              '<div class="admin-form-group">' +
+                '<label>任务分组 <span class="req">*</span></label>' +
+                '<select name="jobGroup" class="glass-input">' +
+                  '<option value="DEFAULT">默认</option>' +
+                  '<option value="SYSTEM">系统</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="admin-form-group">' +
+                '<label>cron表达式 <span class="req">*</span></label>' +
+                '<input type="text" name="cronExpression" class="glass-input" placeholder="如 0/10 * * * * ?" required />' +
+              '</div>' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>调用目标字符串 <span class="req">*</span></label>' +
+              '<input type="text" name="invokeTarget" class="glass-input" placeholder="如 ryTask.ryParams(\'ry\')" required />' +
+              '<div class="admin-form-hint">Bean名称.方法名(参数)，如 ryTask.ryNoParams()</div>' +
+            '</div>' +
+            '<div class="admin-form-row">' +
+              '<div class="admin-form-group">' +
+                '<label>执行策略</label>' +
+                '<select name="misfirePolicy" class="glass-input">' +
+                  '<option value="1">立即执行</option>' +
+                  '<option value="2">执行一次</option>' +
+                  '<option value="3">放弃执行</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="admin-form-group">' +
+                '<label>是否并发</label>' +
+                '<select name="concurrent" class="glass-input">' +
+                  '<option value="0">允许</option>' +
+                  '<option value="1">禁止</option>' +
+                '</select>' +
+              '</div>' +
+            '</div>' +
+            (isEdit ?
+              '<div class="admin-form-group">' +
+                '<label>状态</label>' +
+                '<select name="status" class="glass-input">' +
+                  '<option value="0">正常</option>' +
+                  '<option value="1">暂停</option>' +
+                '</select>' +
+              '</div>' : '') +
+          '</form>';
+
+        var footer =
+          '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>';
+
+        Admin.openModal({
+          title: isEdit ? '编辑定时任务' : '新增定时任务',
+          body: body,
+          footer: footer,
+          onOpen: function (modal) {
+            var form = modal.querySelector('#edit-form');
+            if (isEdit) {
+              Admin.fillForm(form, row);
+            }
+            modal.querySelector('#btn-save').addEventListener('click', function () {
+              if (!form.checkValidity()) {
+                form.reportValidity();
+                return;
+              }
+              var data = Admin.serializeForm(form);
+              // misfirePolicy / concurrent / status 在参考后台中均为字符串，保持原值不转数字
+              if (isEdit) {
+                data.jobId = row.jobId;
+              } else {
+                data.status = '0'; // 新增默认正常
+              }
+              var saveApi = isEdit
+                ? Admin.api.put('/monitor/job', data)
+                : Admin.api.post('/monitor/job', data);
+              saveApi.then(function () {
+                Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+                Admin.closeModal();
+                loadList();
+              }).catch(function (err) {
+                Admin.toast(err.message || '保存失败', 'error');
+              });
+            });
+          },
+        });
+      }
+
+      // ===== 事件绑定 =====
+      // 表格操作按钮（事件委托）
+      tableContainer.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var action = btn.getAttribute('data-action');
+        var id = btn.getAttribute('data-id');
+        if (action === 'delete') {
+          handleDelete(id);
+        } else if (action === 'edit') {
+          // 从已存储的列表数据中查找行数据
+          var rowData = findRowByJobId(id);
+          if (rowData) {
+            openJobModal(rowData);
+          } else {
+            Admin.toast('未找到任务数据，请刷新后重试', 'error');
+          }
+        }
+      });
+
+      // 状态开关事件委托
+      tableContainer.addEventListener('change', function (e) {
+        var cb = e.target.closest('.admin-switch input[type="checkbox"]');
+        if (!cb) return;
+        var label = cb.closest('.admin-switch');
+        var id = label.getAttribute('data-id');
+        // 开关开启=正常('0')，关闭=暂停('1')；cb.checked 为切换后的新状态
+        var newStatus = cb.checked ? '0' : '1';
+        toggleStatus(id, newStatus);
+      });
+
+      btnSearch.addEventListener('click', doSearch);
+      btnReset.addEventListener('click', doReset);
+      btnRefresh.addEventListener('click', function () { loadList(); });
+      btnAdd.addEventListener('click', function () { openJobModal(null); });
+      btnBatchDel.addEventListener('click', handleBatchDelete);
+      // 回车搜索
+      inputJobName.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') doSearch();
+      });
+
+      // ===== 启动 =====
+      loadList();
+    }
+  })();
+</script>
+
+<style is:global>
+</style>

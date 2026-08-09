@@ -1,0 +1,333 @@
+---
+/**
+ * 管理后台 - 公告管理 - /admin/site-notice
+ * 接口：GET /sys/notice/list | POST /sys/notice/add | PUT /sys/notice/update | DELETE /sys/notice/delete/{ids}
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="公告管理" description="公告管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>公告管理</h1>
+      <p class="page-sub">管理站点公告，支持发布 / 草稿状态</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-content">公告内容</label>
+        <input type="text" id="search-content" class="glass-input" placeholder="请输入公告内容" />
+      </div>
+      <div class="admin-search-field">
+        <label for="search-isShow">是否展示</label>
+        <select id="search-isShow" class="glass-input">
+          <option value="">全部</option>
+          <option value="1">是</option>
+          <option value="0">否</option>
+        </select>
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+
+    // ===== 登录状态检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    // ===== 页面状态 =====
+    var state = {
+      pageNum: 1,
+      pageSize: 10,
+      total: 0,
+      query: { content: '', isShow: '' },
+      loading: false,
+      selectedIds: [],
+      list: [],
+    };
+
+    // 展示徽章：isShow 1 展示 / 0 隐藏
+    function isShowBadge(isShow) {
+      var s = Number(isShow);
+      if (s === 1) return Admin.badge('是', 'success');
+      if (s === 0) return Admin.badge('否', 'danger');
+      return Admin.badge('未知', 'default');
+    }
+
+    // 显示位置徽章
+    function positionBadge(position) {
+      if (!position) return '<span style="color:var(--text-tertiary);">-</span>';
+      var map = { left: '左侧', right: '右侧', top: '顶部', bottom: '底部', center: '中间' };
+      var label = map[position] || position;
+      return Admin.badge(label, 'info');
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'content', title: '内容',
+        render: function (row) {
+          var d = row.content || '';
+          d = String(d).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+          return d.length > 80 ? Admin.esc(d.slice(0, 80)) + '…' : Admin.esc(d);
+        }
+      },
+      {
+        key: 'isShow', title: '是否展示', width: '100px', align: 'center',
+        render: function (row) { return isShowBadge(row.isShow); }
+      },
+      {
+        key: 'position', title: '显示位置', width: '100px', align: 'center',
+        render: function (row) { return positionBadge(row.position); }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '160px',
+        render: function (row) { return Admin.formatDate(row.createTime, true); }
+      },
+      {
+        title: '操作', width: '140px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('修改', 'act-edit', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== 加载列表 =====
+    function loadList() {
+      if (state.loading) return;
+      state.loading = true;
+      Admin.showLoading(tableContainer);
+      var params = {
+        pageNum: state.pageNum,
+        pageSize: state.pageSize,
+        content: state.query.content,
+      };
+      if (state.query.isShow !== '') params.isShow = state.query.isShow;
+      Admin.api.get('/sys/notice/list', params).then(function (data) {
+        state.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && state.pageNum > 1) {
+          var tp = Math.ceil(page.total / state.pageSize) || 1;
+          state.pageNum = Math.min(state.pageNum - 1, tp);
+          if (state.pageNum < 1) state.pageNum = 1;
+          return loadList();
+        }
+        state.list = page.list;
+        state.total = page.total;
+        Admin.renderTable(tableContainer, columns, page.list, {
+          emptyText: '暂无公告数据',
+          onSelectionChange: function (ids) { state.selectedIds = ids; }
+        });
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          }
+        });
+      }).catch(function (err) {
+        state.loading = false;
+        Admin.showError(tableContainer, err.message);
+      });
+    }
+
+    // ===== 搜索 / 重置 =====
+    function doSearch() {
+      state.query.content = (document.getElementById('search-content').value || '').trim();
+      state.query.isShow = document.getElementById('search-isShow').value;
+      state.pageNum = 1;
+      loadList();
+    }
+    function doReset() {
+      document.getElementById('search-content').value = '';
+      document.getElementById('search-isShow').value = '';
+      state.query.content = '';
+      state.query.isShow = '';
+      state.pageNum = 1;
+      loadList();
+    }
+
+    // ===== 弹窗表单 =====
+    function formHtml() {
+      return '<form id="edit-form">' +
+        '<div class="admin-form-group">' +
+          '<label>公告内容 <span class="req">*</span></label>' +
+          '<textarea name="content" class="glass-input" placeholder="请输入公告内容" style="min-height:160px;" required></textarea>' +
+        '</div>' +
+        '<div class="admin-form-row">' +
+          '<div class="admin-form-group">' +
+            '<label>是否展示</label>' +
+            '<select name="isShow" class="glass-input">' +
+              '<option value="1">是</option>' +
+              '<option value="0">否</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>显示位置</label>' +
+            '<select name="position" class="glass-input">' +
+              '<option value="left">左侧</option>' +
+              '<option value="right">右侧</option>' +
+              '<option value="top">顶部</option>' +
+              '<option value="bottom">底部</option>' +
+              '<option value="center">中间</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+      '</form>';
+    }
+
+    // ===== 新增 / 编辑弹窗 =====
+    function openEditModal(row) {
+      var isEdit = !!row;
+      Admin.openModal({
+        title: isEdit ? '修改公告' : '新增公告',
+        body: formHtml(),
+        footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>',
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          if (isEdit) {
+            Admin.fillForm(form, row);
+          }
+          var saveBtn = modal.querySelector('#btn-save');
+          saveBtn.addEventListener('click', function () {
+            if (!form.content.value.trim()) {
+              Admin.toast('请输入公告内容', 'error');
+              return;
+            }
+            var data = Admin.serializeForm(form);
+            data.isShow = Number(data.isShow);
+            var promise;
+            if (isEdit) {
+              data.id = row.id;
+              promise = Admin.api.put('/sys/notice/update', data);
+            } else {
+              promise = Admin.api.post('/sys/notice/add', data);
+            }
+            saveBtn.disabled = true;
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              loadList();
+            }).catch(function (err) {
+              saveBtn.disabled = false;
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        }
+      });
+    }
+
+    // ===== 删除 =====
+    function handleDelete(id) {
+      Admin.confirm('确定要删除该公告吗？', function () {
+        Admin.api.del('/sys/notice/delete/' + encodeURIComponent(id)).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 批量删除 =====
+    function handleBatchDelete() {
+      var ids = state.selectedIds;
+      if (!ids || ids.length === 0) {
+        Admin.toast('请先选择要删除的数据', 'info');
+        return;
+      }
+      Admin.confirm('确定要删除选中的 ' + ids.length + ' 条数据吗？', function () {
+        Admin.api.del('/sys/notice/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+          Admin.toast('批量删除成功', 'success');
+          state.selectedIds = [];
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '批量删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 从当前列表中按 id 查找行 =====
+    function findRowById(id) {
+      for (var i = 0; i < state.list.length; i++) {
+        if (String(state.list[i].id) === String(id)) return state.list[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () { openEditModal(null); });
+    document.getElementById('btn-batch-del').addEventListener('click', handleBatchDelete);
+    document.getElementById('search-content').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+    // 表格操作事件委托
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openEditModal(row);
+      } else if (btn.classList.contains('act-del')) {
+        handleDelete(id);
+      }
+    });
+
+    // ===== 初始化 =====
+    loadList();
+    }
+  })();
+</script>

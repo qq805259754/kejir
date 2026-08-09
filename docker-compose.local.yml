@@ -1,0 +1,21 @@
+# ==========================================================================
+# 科技热 - Docker Compose 本地开发配置
+# ==========================================================================
+version: '3.8'
+
+services:
+  dev:
+    image: node:22-alpine
+    container_name: tech-heat-dev
+    working_dir: /app
+    ports:
+      - "4321:4321"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PUBLIC_SITE_URL=http://localhost:4321
+      - PUBLIC_BUILD_ENV=local
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    restart: unless-stopped

@@ -1,0 +1,77 @@
+---
+/**
+ * ColorPicker - 主题色调切换（5种色调）
+ */
+const colors = [
+  { key: 'blue', name: '海蓝', color: '#667eea' },
+  { key: 'purple', name: '紫罗兰', color: '#a855f7' },
+  { key: 'green', name: '翠绿', color: '#10b981' },
+  { key: 'rose', name: '玫红', color: '#f43f5e' },
+  { key: 'amber', name: '琥珀', color: '#f59e0b' },
+];
+---
+
+<div class="color-picker" id="color-picker">
+  <button class="color-picker-btn" type="button" id="color-picker-btn" aria-label="切换主题色调" title="主题色调"></button>
+  <div class="color-picker-panel" role="menu">
+    {colors.map((c) => (
+      <button
+        class="color-dot"
+        type="button"
+        data-color={c.key}
+        style={`background:${c.color}`}
+        title={c.name}
+        aria-label={c.name}
+      ></button>
+    ))}
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    var picker = document.getElementById('color-picker');
+    var btn = document.getElementById('color-picker-btn');
+    if (!picker || !btn) return;
+
+    var dots = picker.querySelectorAll('.color-dot');
+    var colorMap = {
+      blue: '#667eea',
+      purple: '#a855f7',
+      green: '#10b981',
+      rose: '#f43f5e',
+      amber: '#f59e0b'
+    };
+
+    function setAccent(key) {
+      if (!key || !colorMap[key]) key = 'blue';
+      document.documentElement.setAttribute('data-accent', key);
+      try { localStorage.setItem('accent-color', key); } catch (e) {}
+      btn.style.background = colorMap[key];
+      dots.forEach(function (d) {
+        d.classList.toggle('active', d.getAttribute('data-color') === key);
+      });
+    }
+
+    // 初始化读取
+    var saved;
+    try { saved = localStorage.getItem('accent-color'); } catch (e) {}
+    setAccent(saved || 'blue');
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      picker.classList.toggle('open');
+    });
+
+    dots.forEach(function (dot) {
+      dot.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setAccent(dot.getAttribute('data-color'));
+        picker.classList.remove('open');
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!picker.contains(e.target)) picker.classList.remove('open');
+    });
+  })();
+</script>

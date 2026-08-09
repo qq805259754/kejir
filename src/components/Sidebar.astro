@@ -1,0 +1,103 @@
+---
+/**
+ * Sidebar - 容器内部左侧导航（grid-area: sidebar）
+ * 三段式：顶部圆形 LOGO，中间竖排导航（居中），底部空
+ */
+import { siteConfig } from '../data/site';
+
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = '/' } = Astro.props as Props;
+const logoUrl = import.meta.env.PUBLIC_SITE_LOGO || '';
+
+function isActive(href: string): boolean {
+  if (href === '/') return currentPath === '/';
+  const base = href.split('?')[0];
+  return currentPath === base || currentPath.startsWith(base + '/');
+}
+
+/** 返回内联 SVG（stroke-based 24x24） */
+function iconSvg(name: string): string {
+  switch (name) {
+    case 'home':
+      return '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>';
+    case 'archive':
+      return '<rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/>';
+    case 'message':
+      return '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>';
+    case 'info':
+      return '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+    case 'link':
+      return '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>';
+    default:
+      return '<circle cx="12" cy="12" r="4"/>';
+  }
+}
+---
+
+<aside class="sidebar" data-sidebar>
+  <!-- 顶部圆形 LOGO -->
+  <div class="sidebar-top">
+    <a class="sidebar-logo" href="/" title={siteConfig.title} aria-label={`${siteConfig.title}首页`} id="sidebar-logo-link">
+      {logoUrl ? (
+        <img id="sidebar-logo-img" src={logoUrl} alt={siteConfig.title} />
+      ) : (
+        <svg id="sidebar-logo-default" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="6" cy="6" r="1.5"/><circle cx="12" cy="6" r="1.5"/><circle cx="18" cy="6" r="1.5"/>
+          <circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>
+          <circle cx="6" cy="18" r="1.5"/><circle cx="12" cy="18" r="1.5"/><circle cx="18" cy="18" r="1.5"/>
+        </svg>
+      )}
+    </a>
+  </div>
+
+  <!-- 中间导航（竖排居中） -->
+  <nav class="sidebar-nav" aria-label="主导航">
+    <div class="active-indicator" aria-hidden="true"></div>
+    {siteConfig.navItems.map((item) => (
+      <a
+        href={item.href}
+        class={`nav-icon-btn${isActive(item.href) ? ' active' : ''}`}
+        title={item.label}
+        aria-label={item.label}
+        aria-current={isActive(item.href) ? 'page' : undefined}
+        data-nav
+      >
+        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+             set:html={iconSvg(item.icon)}></svg>
+      </a>
+    ))}
+  </nav>
+
+  <!-- 底部：不显示任何内容 -->
+  <div class="sidebar-bottom"></div>
+</aside>
+
+<script is:inline>
+  (function() {
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      var logoLink = document.getElementById('sidebar-logo-link');
+      if (logoLink && cfg.name) logoLink.title = cfg.name;
+      // 如果后端返回了 logo 且默认是 svg 占位，替换为 img
+      if (cfg.logo) {
+        var existingImg = document.getElementById('sidebar-logo-img');
+        var existingSvg = document.getElementById('sidebar-logo-default');
+        if (existingImg) {
+          existingImg.src = cfg.logo;
+        } else if (existingSvg) {
+          var img = document.createElement('img');
+          img.id = 'sidebar-logo-img';
+          img.src = cfg.logo;
+          img.alt = cfg.name || 'logo';
+          existingSvg.parentNode.replaceChild(img, existingSvg);
+        }
+      }
+    }
+    if (window.__webConfig) applyConfig(window.__webConfig);
+    document.addEventListener('webconfig:updated', function(e) { applyConfig(e.detail); });
+  })();
+</script>

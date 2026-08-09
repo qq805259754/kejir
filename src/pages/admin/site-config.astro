@@ -1,0 +1,490 @@
+﻿---
+/**
+ * 管理后台 - 网站配置 - /admin/site-config
+ * 接口：GET /sys/web/config | PUT /sys/web/update
+ * 表单页（非列表页）：加载配置后回填表单，保存按钮提交
+ * 字段参照 blog-admin 后台：logo, name, summary, recordNum, webUrl,
+ *   author, authorInfo, authorAvatar, aboutMe,
+ *   github, gitee, qqNumber, qqGroup, wechat, email,
+ *   aliPay, weixinPay, touristAvatar,
+ *   showList, loginTypeList, openComment, openAdmiration, openLantern, bulletin
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="网站配置" description="网站配置" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>网站配置</h1>
+      <p class="page-sub">管理站点基础信息、作者信息、社交链接与全局设置</p>
+    </div>
+
+    <!-- 加载状态 -->
+    <div id="config-loading" class="admin-loading">
+      <div class="admin-loading-spinner"></div>
+      <p>正在加载配置...</p>
+    </div>
+
+    <!-- 配置表单 -->
+    <form id="edit-form" style="display:none;">
+      <!-- 基础信息 -->
+      <div class="glass-card config-card">
+        <div class="config-card-header">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <h3 class="config-card-title">基础信息</h3>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>网站名称</label>
+            <input type="text" name="name" class="glass-input" placeholder="请输入网站名称" />
+          </div>
+          <div class="admin-form-group">
+            <label>网站地址</label>
+            <input type="text" name="webUrl" class="glass-input" placeholder="请输入网站地址" />
+          </div>
+        </div>
+        <div class="admin-form-group">
+          <label>网站Logo</label>
+          <div id="logo-upload" class="config-upload"></div>
+          <input type="hidden" name="logo" />
+        </div>
+        <div class="admin-form-group">
+          <label>网站介绍</label>
+          <textarea name="summary" class="glass-input" placeholder="请输入网站介绍"></textarea>
+        </div>
+        <div class="admin-form-group">
+          <label>备案号</label>
+          <input type="text" name="recordNum" class="glass-input" placeholder="请输入站点备案号" />
+        </div>
+      </div>
+
+      <!-- 作者信息 -->
+      <div class="glass-card config-card">
+        <div class="config-card-header">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <h3 class="config-card-title">作者信息</h3>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>作者名称</label>
+            <input type="text" name="author" class="glass-input" placeholder="请输入作者名称" />
+          </div>
+          <div class="admin-form-group">
+            <label>作者头像</label>
+            <div id="authorAvatar-upload" class="config-upload"></div>
+            <input type="hidden" name="authorAvatar" />
+          </div>
+        </div>
+        <div class="admin-form-group">
+          <label>个性签名</label>
+          <input type="text" name="authorInfo" class="glass-input" placeholder="请输入个性签名" />
+        </div>
+        <div class="admin-form-group">
+          <label>关于我</label>
+          <div id="aboutMe-editor" class="config-editor"></div>
+          <input type="hidden" name="aboutMe" />
+          <p class="admin-form-hint">支持富文本内容（加粗、标题、列表、链接、图片等）</p>
+        </div>
+      </div>
+
+      <!-- 社交信息 -->
+      <div class="glass-card config-card">
+        <div class="config-card-header">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <h3 class="config-card-title">社交信息</h3>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>GitHub</label>
+            <input type="text" name="github" class="glass-input" placeholder="请输入 GitHub 主页地址" />
+          </div>
+          <div class="admin-form-group">
+            <label>Gitee</label>
+            <input type="text" name="gitee" class="glass-input" placeholder="请输入 Gitee 主页地址" />
+          </div>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>邮箱</label>
+            <input type="text" name="email" class="glass-input" placeholder="请输入联系邮箱" />
+          </div>
+          <div class="admin-form-group">
+            <label>微信</label>
+            <input type="text" name="wechat" class="glass-input" placeholder="请输入微信号" />
+          </div>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>QQ号</label>
+            <input type="text" name="qqNumber" class="glass-input" placeholder="请输入 QQ 号" />
+          </div>
+          <div class="admin-form-group">
+            <label>QQ群</label>
+            <input type="text" name="qqGroup" class="glass-input" placeholder="请输入 QQ 群号" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 收款信息 -->
+      <div class="glass-card config-card">
+        <div class="config-card-header">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          <h3 class="config-card-title">收款信息</h3>
+        </div>
+        <div class="admin-form-row">
+          <div class="admin-form-group">
+            <label>支付宝收款码</label>
+            <div id="aliPay-upload" class="config-upload"></div>
+            <input type="hidden" name="aliPay" />
+          </div>
+          <div class="admin-form-group">
+            <label>微信收款码</label>
+            <div id="weixinPay-upload" class="config-upload"></div>
+            <input type="hidden" name="weixinPay" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 网站设置 -->
+      <div class="glass-card config-card">
+        <div class="config-card-header">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <h3 class="config-card-title">网站设置</h3>
+        </div>
+        <div class="admin-form-group">
+          <label>游客头像</label>
+          <div id="touristAvatar-upload" class="config-upload"></div>
+          <input type="hidden" name="touristAvatar" />
+        </div>
+        <div class="admin-form-group">
+          <label>公告</label>
+          <textarea name="bulletin" class="glass-input" placeholder="请输入站点公告内容"></textarea>
+        </div>
+        <!-- 开关设置 -->
+        <div class="config-switch-row">
+          <label class="config-switch-item">
+            <span>开启评论</span>
+            <input type="checkbox" name="openComment" data-value="1" />
+          </label>
+          <label class="config-switch-item">
+            <span>开启赞赏</span>
+            <input type="checkbox" name="openAdmiration" data-value="1" />
+          </label>
+          <label class="config-switch-item">
+            <span>开启灯笼</span>
+            <input type="checkbox" name="openLantern" data-value="1" />
+          </label>
+        </div>
+        <!-- 显示的社交信息 -->
+        <div class="admin-form-group">
+          <label>显示的社交信息</label>
+          <div class="config-checkbox-group" id="showList-group">
+            <label class="config-check-item"><input type="checkbox" value="email" /> 邮箱</label>
+            <label class="config-check-item"><input type="checkbox" value="qq" /> QQ</label>
+            <label class="config-check-item"><input type="checkbox" value="qqGroup" /> QQ群</label>
+            <label class="config-check-item"><input type="checkbox" value="github" /> GitHub</label>
+            <label class="config-check-item"><input type="checkbox" value="gitee" /> Gitee</label>
+            <label class="config-check-item"><input type="checkbox" value="wechat" /> 微信</label>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <!-- 底部固定保存按钮 -->
+    <div class="config-save-bar" id="config-save-bar" style="display:none;">
+      <button type="button" class="glass-btn glass-btn-primary" id="btn-save">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        保存配置
+      </button>
+    </div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+    var loadingEl = document.getElementById('config-loading');
+    var form = document.getElementById('edit-form');
+    var saveBar = document.getElementById('config-save-bar');
+    var saveBtn = document.getElementById('btn-save');
+    // 当前配置 id（加载时从接口返回中读取，保存时必须一并上送，否则更新接口无法定位记录）
+    var currentConfigId = null;
+
+    // ===== 登录状态检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    // ===== 自定义回填：处理开关字段（openComment 等 0/1 → checkbox） =====
+    function fillConfigForm(data) {
+      if (!data) return;
+      // 普通文本字段
+      var textFields = [
+        'name', 'webUrl', 'logo', 'summary', 'recordNum',
+        'author', 'authorAvatar', 'authorInfo', 'aboutMe',
+        'github', 'gitee', 'email', 'wechat', 'qqNumber', 'qqGroup',
+        'aliPay', 'weixinPay', 'touristAvatar', 'bulletin'
+      ];
+      textFields.forEach(function (key) {
+        var el = form.querySelector('[name="' + key + '"]');
+        if (el && data[key] !== undefined && data[key] !== null) {
+          el.value = data[key];
+        }
+      });
+      // 开关字段
+      var switchFields = ['openComment', 'openAdmiration', 'openLantern'];
+      switchFields.forEach(function (key) {
+        var el = form.querySelector('[name="' + key + '"]');
+        if (el) el.checked = Number(data[key]) === 1;
+      });
+      // showList：JSON 数组字符串 → checkbox 勾选
+      var showListVal = data.showList;
+      var showListArr = [];
+      if (showListVal) {
+        try { showListArr = typeof showListVal === 'string' ? JSON.parse(showListVal) : showListVal; } catch (e) { showListArr = []; }
+      }
+      var showListInputs = form.querySelectorAll('#showList-group input[type="checkbox"]');
+      showListInputs.forEach(function (cb) {
+        cb.checked = showListArr.indexOf(cb.value) !== -1;
+      });
+    }
+
+    // ===== 自定义序列化：开关 → 0/1，showList → JSON 字符串 =====
+    function serializeConfigForm() {
+      var data = {};
+      // 文本字段（含图片隐藏域）
+      var elements = form.querySelectorAll('input[type="text"], input[type="url"], input[type="hidden"], textarea');
+      elements.forEach(function (el) {
+        if (el.name) data[el.name] = el.value;
+      });
+      // 开关字段
+      var switchFields = ['openComment', 'openAdmiration', 'openLantern'];
+      switchFields.forEach(function (key) {
+        var el = form.querySelector('[name="' + key + '"]');
+        data[key] = el && el.checked ? 1 : 0;
+      });
+      // showList → JSON 字符串
+      var showListArr = [];
+      var showListInputs = form.querySelectorAll('#showList-group input[type="checkbox"]:checked');
+      showListInputs.forEach(function (cb) { showListArr.push(cb.value); });
+      data.showList = JSON.stringify(showListArr);
+      return data;
+    }
+
+    // ===== 初始化图片上传 + 富文本编辑器（仅一次） =====
+    var mediaInited = false;
+    function initMediaFields() {
+      if (mediaInited) return;
+      mediaInited = true;
+      // 图片上传字段：读取隐藏域当前值，上传/删除时回写隐藏域
+      var imageFields = [
+        { id: 'logo-upload', name: 'logo', source: 'logo' },
+        { id: 'authorAvatar-upload', name: 'authorAvatar', source: 'avatar' },
+        { id: 'aliPay-upload', name: 'aliPay', source: 'pay' },
+        { id: 'weixinPay-upload', name: 'weixinPay', source: 'pay' },
+        { id: 'touristAvatar-upload', name: 'touristAvatar', source: 'avatar' },
+      ];
+      imageFields.forEach(function (cfg) {
+        var hidden = form.querySelector('[name="' + cfg.name + '"]');
+        Admin.createUploadField({
+          container: document.getElementById(cfg.id),
+          value: hidden.value || '',
+          source: cfg.source,
+          onChange: function (url) { hidden.value = url || ''; }
+        });
+      });
+      // 关于我：富文本编辑器
+      var aboutHidden = form.querySelector('[name="aboutMe"]');
+      Admin.createRichEditor({
+        container: document.getElementById('aboutMe-editor'),
+        value: aboutHidden.value || '',
+        placeholder: '请输入关于我内容...',
+        onChange: function (html) { aboutHidden.value = html; }
+      });
+    }
+
+    // ===== 加载配置 =====
+    function loadConfig() {
+      loadingEl.style.display = '';
+      form.style.display = 'none';
+      saveBar.style.display = 'none';
+      Admin.api.get('/sys/web/config').then(function (data) {
+        loadingEl.style.display = 'none';
+        form.style.display = '';
+        saveBar.style.display = '';
+        if (data) {
+          // 记录配置 id，供保存时上送（兼容 id / configId / _id 字段名）
+          currentConfigId = data.id != null ? data.id : (data.configId != null ? data.configId : (data._id != null ? data._id : null));
+          fillConfigForm(data);
+        }
+        initMediaFields();
+      }).catch(function (err) {
+        loadingEl.style.display = 'none';
+        Admin.toast(err.message || '加载配置失败', 'error');
+        // 加载失败仍展示空表单，允许填写后保存
+        form.style.display = '';
+        saveBar.style.display = '';
+        initMediaFields();
+      });
+    }
+
+    // ===== 保存配置 =====
+    function saveConfig() {
+      var data = serializeConfigForm();
+      // 更新接口必须上送 id，否则无法定位要更新的记录
+      if (currentConfigId != null) data.id = currentConfigId;
+      saveBtn.disabled = true;
+      var originalHtml = saveBtn.innerHTML;
+      saveBtn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;">保存中...</span>';
+      Admin.api.put('/sys/web/update', data).then(function () {
+        Admin.toast('保存成功', 'success');
+        // 保存成功后自动返回上级页面（有历史则返回，否则回到后台首页）
+        setTimeout(function () {
+          if (window.history.length > 1) {
+            window.history.back();
+          } else {
+            location.href = '/admin';
+          }
+        }, 400);
+      }).catch(function (err) {
+        Admin.toast(err.message || '保存失败', 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = originalHtml;
+      });
+    }
+
+    // ===== 事件绑定 =====
+    saveBtn.addEventListener('click', saveConfig);
+
+    // ===== 初始化 =====
+    loadConfig();
+    }
+  })();
+</script>
+
+<style>
+  .admin-page .config-card {
+    padding: var(--sp-5);
+    margin-bottom: var(--sp-5);
+  }
+  .config-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .flat .config-card-header { border-bottom-color: var(--border); }
+  .config-card-header svg {
+    color: var(--brand);
+    flex-shrink: 0;
+  }
+  .config-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+  }
+  .admin-page .config-card .admin-form-group:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 开关行 */
+  .config-switch-row {
+    display: flex;
+    gap: var(--sp-5);
+    flex-wrap: wrap;
+    margin-bottom: var(--sp-4);
+  }
+  .config-switch-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .config-switch-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  /* 复选框组 */
+  .config-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding: 10px 14px;
+    border-radius: var(--r-sm, 8px);
+    background: var(--lg-bg-subtle, var(--surface));
+    border: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .flat .config-checkbox-group {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .config-check-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .config-check-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+
+  /* 底部固定保存按钮 */
+  .config-save-bar {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--sp-4) 0;
+    margin-top: var(--sp-2);
+    z-index: 5;
+  }
+  .config-save-bar .glass-btn {
+    padding: 10px 28px;
+    font-size: 0.9rem;
+    box-shadow: 0 6px 24px var(--brand-a35);
+  }
+
+  /* 图片上传容器 */
+  .config-upload { margin-top: 2px; }
+  /* 富文本编辑器容器 */
+  .config-editor { margin-top: 2px; }
+  .config-editor .admin-editor-content { min-height: 200px; }
+
+  @media (max-width: 768px) {
+    .admin-page .config-card { padding: var(--sp-4); }
+    .config-save-bar { justify-content: center; }
+    .config-switch-row { flex-direction: column; gap: var(--sp-3); }
+  }
+</style>

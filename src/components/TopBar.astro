@@ -1,0 +1,607 @@
+---
+/**
+ * TopBar - 主区域顶部栏
+ * 左：面包屑（站点名 > 当前页）
+ * 右：搜索框 + 深浅切换（单图标） + 液态玻璃/平面切换（单图标）
+ * 每个按钮只显示"切换目标"的图标：浅色→月亮、深色→太阳、玻璃→列表、平面→玻璃
+ */
+import { siteConfig } from '../data/site';
+
+const currentPath = Astro.url.pathname;
+// 服务端直接注入站点 logo（与 Sidebar 一致），不依赖后端异步接口，移动端图片即时可显示
+const logoUrl = import.meta.env.PUBLIC_SITE_LOGO || '';
+
+function isActivePath(href: string, path: string): boolean {
+  if (href === '/') return path === '/';
+  return path === href || path.startsWith(href + '/');
+}
+
+const currentLabel =
+  isActivePath('/', currentPath) ? '首页' :
+  isActivePath('/archive', currentPath) ? '归档' :
+  isActivePath('/about', currentPath) ? '我的' :
+  isActivePath('/links', currentPath) ? '友链' :
+  isActivePath('/message', currentPath) ? '留言板' :
+  isActivePath('/login', currentPath) ? '登录' :
+  isActivePath('/admin', currentPath) ? '管理后台' :
+  isActivePath('/tags', currentPath) ? '标签' :
+  isActivePath('/categories', currentPath) ? '分类' :
+  isActivePath('/profile', currentPath) ? '个人中心' :
+  isActivePath('/change-password', currentPath) ? '修改密码' :
+  isActivePath('/my-articles', currentPath) ? '我的文章' :
+  isActivePath('/my-comments', currentPath) ? '我的评论' :
+  isActivePath('/my-replies', currentPath) ? '我的回复' :
+  isActivePath('/my-likes', currentPath) ? '我的点赞' :
+  isActivePath('/register', currentPath) ? '注册' :
+  isActivePath('/article-editor', currentPath) ? '写文章' :
+  '文章';
+---
+
+<header class="topbar">
+  <div class="topbar-left" id="topbar-breadcrumb">
+    <!-- Mobile logo (shown via CSS on <768px) — src 由服务端环境变量直接注入，保证图片即时加载 -->
+    {logoUrl ? (
+      <img class="topbar-logo" id="topbar-logo" src={logoUrl} alt={siteConfig.title} />
+    ) : (
+      <img class="topbar-logo" id="topbar-logo" src="" alt={siteConfig.title} />
+    )}
+    <span class="topbar-title" id="topbar-site-title">科技热</span>
+    <span class="topbar-sep">›</span>
+    <span class="topbar-subtitle" id="topbar-bc-text">{currentLabel}</span>
+  </div>
+
+  <div class="topbar-right">
+    <div class="topbar-search" id="topbar-search-wrapper">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="topbar-search-input" placeholder="搜索文章..." autocomplete="off" />
+      <div class="topbar-search-dropdown" id="topbar-search-dropdown" style="display:none;"></div>
+    </div>
+
+    <!-- 深浅切换：浅色时显示月亮（切深色），深色时显示太阳（切浅色） -->
+    <button class="topbar-icon-btn" id="theme-toggle" title="切换明暗" aria-label="切换明暗模式">
+      <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18" style="display:none;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    </button>
+
+    <!-- 玻璃/平面切换：玻璃时显示列表（切平面），平面时显示玻璃块（切玻璃） -->
+    <button class="topbar-icon-btn" id="glass-toggle" title="切换风格" aria-label="切换界面风格">
+      <svg class="glass-icon-flat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>
+      <svg class="glass-icon-glass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="18" height="18" style="display:none;">
+        <rect x="3" y="3" width="18" height="18" rx="3" fill-opacity="0.2" stroke="currentColor"/>
+        <path d="M3 12h18" stroke-opacity="0.6"/>
+      </svg>
+    </button>
+
+    <!-- 登录头像按钮 + 下拉菜单 -->
+    <div class="topbar-avatar-wrap" id="topbar-avatar-wrap">
+      <a href="/login" class="topbar-avatar" title="登录" aria-label="登录" id="topbar-avatar-link">
+        <span class="topbar-avatar-fallback" id="topbar-avatar-fallback">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="20" height="20"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </span>
+        <img class="topbar-avatar-img" id="topbar-avatar-img" src="" alt="头像" style="display:none;" />
+      </a>
+      <!-- 用户下拉菜单 -->
+      <div class="topbar-user-menu" id="topbar-user-menu" style="display:none;">
+        <a href="/profile" class="user-menu-item">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          个人中心
+        </a>
+        <a href="/admin" class="user-menu-item user-menu-admin" id="user-menu-admin" style="display:none;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          后台管理
+        </a>
+        <div class="user-menu-divider"></div>
+        <a href="javascript:void(0)" class="user-menu-item user-menu-logout" id="user-menu-logout">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          退出登录
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    // data-astro-rerun：每次页面加载及 View Transitions 导航都重新执行本脚本。
+    // 通过 bindEvents 的事件幂等标志，persist 复用时只刷新登录态/UI、不重复绑定事件；
+    // persist 失效（TopBar 被替换为初始 HTML）时则完整重新绑定，确保点击头像等交互始终有效，
+    // 从根本上解决「导航/菜单切换后登录状态消失、点击头像出现登录框」的问题。
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      var t = document.getElementById('topbar-site-title');
+      if (t && cfg.name) t.textContent = cfg.name;
+      // Update mobile logo from webConfig（后端优先，兜底使用环境变量注入的 src）
+      var logo = cfg.logo || cfg.siteLogo || cfg.favicon || '';
+      var logoImg = document.getElementById('topbar-logo');
+      if (logo && logoImg) {
+        logoImg.src = logo;
+      }
+      // Update avatar — 仅在未登录时使用站点作者头像；已登录时由 checkAuthStatus 设置用户头像，避免覆盖闪烁
+      var loggedInNow = window.__api && window.__api.isLoggedIn && window.__api.isLoggedIn();
+      if (!loggedInNow) {
+        var avatar = cfg.authorAvatar || '';
+        var img = document.getElementById('topbar-avatar-img');
+        var fallback = document.getElementById('topbar-avatar-fallback');
+        if (avatar && img && fallback) {
+          img.src = avatar;
+          img.style.display = '';
+          fallback.style.display = 'none';
+          img.onerror = function() { img.style.display = 'none'; fallback.style.display = ''; };
+        }
+      }
+    }
+    if (window.__webConfig) applyConfig(window.__webConfig);
+    document.addEventListener('webconfig:updated', function(e) { applyConfig(e.detail); });
+    // View Transitions 页面切换后重新应用配置并刷新登录状态（TopBar 为 persist 元素，
+    // 切换时脚本不重跑，需在每次导航后重新检查登录态，避免出现「已登录却仍显示登录框」）
+    document.addEventListener('astro:page-load', function() {
+      if (window.__webConfig) applyConfig(window.__webConfig);
+      checkAuthStatus();
+    });
+
+    // ===== 用户认证状态管理 =====
+    var avatarLink = document.getElementById('topbar-avatar-link');
+    var avatarImg = document.getElementById('topbar-avatar-img');
+    var avatarFallback = document.getElementById('topbar-avatar-fallback');
+    var userMenu = document.getElementById('topbar-user-menu');
+    var adminMenuItem = document.getElementById('user-menu-admin');
+    var logoutBtn = document.getElementById('user-menu-logout');
+    var avatarWrap = document.getElementById('topbar-avatar-wrap');
+    var profileChecked = false;
+
+    // 更新头像显示 — 已缓存图片立即显示避免闪烁，未缓存时加载完成后再切换
+    function updateAvatar(src) {
+      if (src && avatarImg && avatarFallback) {
+        avatarImg.onload = function() {
+          avatarImg.style.display = '';
+          avatarFallback.style.display = 'none';
+        };
+        avatarImg.onerror = function() {
+          avatarImg.style.display = 'none';
+          avatarFallback.style.display = '';
+        };
+        avatarImg.src = src;
+        // 已缓存（complete 且有宽度）则立即显示，跳过等待 onload 的一帧
+        if (avatarImg.complete && avatarImg.naturalWidth > 0) {
+          avatarImg.style.display = '';
+          avatarFallback.style.display = 'none';
+        }
+      }
+    }
+
+    // 检查登录状态，更新 UI
+    function checkAuthStatus() {
+      var loggedIn = window.__api && window.__api.isLoggedIn();
+      var user = window.__api ? window.__api.getUser() : null;
+
+      if (loggedIn && user) {
+        // 已登录：头像链接改为 javascript:void(0)，显示用户菜单
+        if (avatarLink) avatarLink.href = 'javascript:void(0)';
+        // 更新头像
+        var av = user.avatar || user.avatarUrl || '';
+        if (av) {
+          updateAvatar(av);
+        } else {
+          // 无头像，显示昵称首字符
+          if (avatarFallback) {
+            var ch = (user.nickname || user.username || 'U').charAt(0).toUpperCase();
+            avatarFallback.innerHTML = '<span style="font-size:0.8rem;font-weight:700;">' + ch + '</span>';
+          }
+        }
+        // 检查角色，显示后台管理菜单（仅检查一次）
+        if (!profileChecked) {
+          profileChecked = true;
+          checkAdminRole();
+        }
+      } else {
+        // 未登录：头像链接指向 /login
+        if (avatarLink) avatarLink.href = '/login';
+      }
+    }
+
+    // 调用 sys/user/profile 查询角色
+    function checkAdminRole() {
+      if (!window.__api || !window.__api.getProfile) return;
+      window.__api.getProfile().then(function(data) {
+        if (!data) return;
+        var roles = data.roles || [];
+        var isAdmin = false;
+        // 检查 roles 数组中是否包含超级管理员
+        if (Array.isArray(roles)) {
+          for (var i = 0; i < roles.length; i++) {
+            var r = typeof roles[i] === 'string' ? roles[i] : (roles[i].roleName || roles[i].name || '');
+            if (r.indexOf('超级管理员') >= 0 || r === 'admin' || r === 'ADMIN') {
+              isAdmin = true;
+              break;
+            }
+          }
+        }
+        if (isAdmin) {
+          try { localStorage.setItem('userRoles', JSON.stringify(roles)); } catch(e) {}
+          if (adminMenuItem) adminMenuItem.style.display = '';
+        }
+      }).catch(function(){});
+    }
+
+    // 事件绑定（幂等：persist 复用已绑定时跳过，避免 data-astro-rerun 重复绑定）
+    function bindEvents() {
+      if (avatarLink && avatarLink.getAttribute('data-topbar-bound') === '1') {
+        // 已绑定：仅刷新登录态/UI
+        checkAuthStatus();
+        return;
+      }
+      if (avatarLink) avatarLink.setAttribute('data-topbar-bound', '1');
+
+      // 头像点击：已登录时切换菜单，未登录时跳转登录页
+      if (avatarLink) {
+        avatarLink.addEventListener('click', function(e) {
+          if (window.__api && window.__api.isLoggedIn()) {
+            e.preventDefault();
+            if (userMenu) {
+              userMenu.style.display = userMenu.style.display === 'none' ? '' : 'none';
+            }
+          }
+        });
+      }
+
+      // 退出登录
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          if (window.__api) {
+            window.__api.logout().then(function() {
+              window.__api.clearAuth();
+              document.dispatchEvent(new Event('user:updated'));
+              window.location.href = '/';
+            }).catch(function() {
+              window.__api.clearAuth();
+              document.dispatchEvent(new Event('user:updated'));
+              window.location.href = '/';
+            });
+          }
+        });
+      }
+
+      // 点击外部关闭菜单
+      document.addEventListener('click', function(e) {
+        if (avatarWrap && !avatarWrap.contains(e.target)) {
+          if (userMenu) userMenu.style.display = 'none';
+        }
+      });
+
+      // 监听用户状态更新事件
+      document.addEventListener('user:updated', function() {
+        profileChecked = false;
+        if (adminMenuItem) adminMenuItem.style.display = 'none';
+        if (userMenu) userMenu.style.display = 'none';
+        checkAuthStatus();
+      });
+
+      checkAuthStatus();
+    }
+
+    // ===== 内联搜索 =====
+    var searchInput = document.getElementById('topbar-search-input');
+    var searchDropdown = document.getElementById('topbar-search-dropdown');
+    var searchTimer = null;
+    var lastKw = '';
+    var searchPageNum = 1;
+    var searchPageSize = 5;
+    var searchTotal = 0;
+    var searchPages = 0;
+    var searchLoading = false;
+    var searchHasMore = true;
+    var currentSearchKw = '';
+
+    // 转义 HTML 特殊字符
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
+    }
+
+    // 高亮关键词：将标题中匹配 keyword 的部分用 <mark> 包裹
+    function highlightKeyword(text, kw) {
+      var safe = esc(text);
+      if (!kw) return safe;
+      var escKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      try {
+        var re = new RegExp('(' + escKw + ')', 'gi');
+        return safe.replace(re, '<mark class="search-hl">$1</mark>');
+      } catch(e) {
+        return safe;
+      }
+    }
+
+    // 渲染单条搜索结果
+    function renderSearchItem(a, kw) {
+      var title = highlightKeyword(a.title || '', kw);
+      var cover = a.cover || '';
+      var imgHtml = cover
+        ? '<img class="search-drop-cover" src="' + esc(cover) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'" /><span class="search-drop-cover search-drop-cover-ph" style="display:none">' + esc((a.title || '文').charAt(0)) + '</span>'
+        : '<span class="search-drop-cover search-drop-cover-ph">' + esc((a.title || '文').charAt(0)) + '</span>';
+      return '<a href="/article/' + (a.id || a.slug || '') + '" class="search-drop-item">' +
+        imgHtml +
+        '<span class="search-drop-title" data-full="' + esc(a.title || '') + '">' + title + '</span>' +
+        '</a>';
+    }
+
+    // 执行搜索请求
+    function doSearch(kw, page, append) {
+      if (searchLoading) return;
+      searchLoading = true;
+      if (!append) {
+        searchDropdown.innerHTML = '<div class="search-drop-loading">搜索中...</div>';
+        searchDropdown.style.display = '';
+      } else {
+        // 追加模式：显示底部加载指示器
+        var loader = searchDropdown.querySelector('.search-drop-loader');
+        if (loader) loader.style.display = '';
+        else {
+          var l = document.createElement('div');
+          l.className = 'search-drop-loader';
+          l.textContent = '加载中...';
+          searchDropdown.appendChild(l);
+        }
+      }
+      window.__api.searchArticles(kw, page, searchPageSize).then(function(res) {
+        var list = res.list || [];
+        searchTotal = res.total || 0;
+        searchPages = res.pages || 0;
+        searchPageNum = res.current || page;
+        searchHasMore = searchPageNum < searchPages;
+
+        if (!list.length && !append) {
+          searchDropdown.innerHTML = '<div class="search-drop-empty">未找到相关文章</div>';
+          searchDropdown.style.display = '';
+          searchLoading = false;
+          return;
+        }
+
+        var itemsHtml = list.map(function(a) { return renderSearchItem(a, kw); }).join('');
+
+        if (append) {
+          // 追加模式：移除旧的加载指示器，追加新内容
+          var oldLoader = searchDropdown.querySelector('.search-drop-loader');
+          if (oldLoader) oldLoader.remove();
+          var listContainer = searchDropdown.querySelector('.search-drop-list');
+          if (listContainer) {
+            listContainer.insertAdjacentHTML('beforeend', itemsHtml);
+          }
+          // 如果没有更多了，显示到底提示
+          if (!searchHasMore) {
+            var endTip = document.createElement('div');
+            endTip.className = 'search-drop-end';
+            endTip.textContent = '已加载全部结果';
+            searchDropdown.appendChild(endTip);
+          }
+        } else {
+          searchDropdown.innerHTML = '<div class="search-drop-list">' + itemsHtml + '</div>';
+          if (!searchHasMore) {
+            var endTip2 = document.createElement('div');
+            endTip2.className = 'search-drop-end';
+            endTip2.textContent = '已加载全部结果';
+            searchDropdown.appendChild(endTip2);
+          }
+          searchDropdown.style.display = '';
+        }
+        searchLoading = false;
+      }).catch(function() {
+        if (append) {
+          var loader = searchDropdown.querySelector('.search-drop-loader');
+          if (loader) loader.remove();
+        }
+        searchLoading = false;
+      });
+    }
+
+    // 无限滚动：监听下拉框滚动事件 + wheel 事件兼容 Chrome
+    if (searchDropdown) {
+      // scroll 事件检测是否到底
+      searchDropdown.addEventListener('scroll', function() {
+        if (searchLoading || !searchHasMore) return;
+        var threshold = 40;
+        if (searchDropdown.scrollTop + searchDropdown.clientHeight >= searchDropdown.scrollHeight - threshold) {
+          if (currentSearchKw) {
+            doSearch(currentSearchKw, searchPageNum + 1, true);
+          }
+        }
+      });
+      // Chrome 下 backdrop-filter 可能拦截滚轮，手动处理
+      searchDropdown.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        searchDropdown.scrollTop += e.deltaY;
+        // 触发 scroll 事件检测
+        if (searchLoading || !searchHasMore) return;
+        var threshold = 40;
+        if (searchDropdown.scrollTop + searchDropdown.clientHeight >= searchDropdown.scrollHeight - threshold) {
+          if (currentSearchKw) {
+            doSearch(currentSearchKw, searchPageNum + 1, true);
+          }
+        }
+      }, { passive: false });
+    }
+
+    // 标题自动轮播：检测标题超长时启动 marquee 滚动
+    var titleMarqueeTimer = null;
+    function startTitleMarquee() {
+      clearInterval(titleMarqueeTimer);
+      titleMarqueeTimer = setInterval(function() {
+        var titles = document.querySelectorAll('.search-drop-title');
+        titles.forEach(function(el) {
+          // 只处理可见的标题
+          if (el.offsetParent === null) return;
+          // 检测文字是否溢出
+          if (el.scrollWidth <= el.clientWidth) return;
+          // 已在动画中的跳过
+          if (el.getAttribute('data-marquee') === '1') return;
+          el.setAttribute('data-marquee', '1');
+          // 复制文字内容实现无缝轮播
+          var inner = el.innerHTML;
+          el.innerHTML = '<span class="search-title-marquee">' + inner + '&nbsp;&nbsp;&nbsp;&nbsp;' + inner + '</span>';
+        });
+      }, 800);
+    }
+    startTitleMarquee();
+
+    // 内联搜索事件绑定（幂等：与头像绑定共用 bindEvents 的守卫，persist 复用时跳过）
+    if (searchInput && searchDropdown) {
+      if (searchInput.getAttribute('data-search-bound') !== '1') {
+        searchInput.setAttribute('data-search-bound', '1');
+        searchInput.addEventListener('input', function() {
+          var kw = this.value.trim();
+          clearTimeout(searchTimer);
+          if (!kw || kw.length < 1) { searchDropdown.style.display = 'none'; searchDropdown.innerHTML = ''; lastKw = ''; return; }
+          searchTimer = setTimeout(function() {
+            if (kw === lastKw && searchDropdown.innerHTML) { searchDropdown.style.display = ''; return; }
+            lastKw = kw;
+            currentSearchKw = kw;
+            searchPageNum = 1;
+            searchHasMore = true;
+            doSearch(kw, 1, false);
+          }, 300);
+        });
+        searchInput.addEventListener('focus', function() {
+          if (searchDropdown.innerHTML) searchDropdown.style.display = '';
+        });
+        document.addEventListener('click', function(e) {
+          var wrapper = document.getElementById('topbar-search-wrapper');
+          if (wrapper && !wrapper.contains(e.target)) searchDropdown.style.display = 'none';
+        });
+        searchInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            var kw = this.value.trim();
+            if (kw) { e.preventDefault(); }
+          }
+        });
+      }
+    }
+
+    // 执行事件绑定 + 登录态刷新（data-astro-rerun 每次导航都会走到这里）
+    bindEvents();
+  })();
+</script>
+
+<!-- 搜索结果项样式使用 is:global，因搜索结果由 JS 动态生成，scoped 样式不生效 -->
+<style is:global>
+  /* 搜索列表容器 — 滚动由外层 .topbar-search-dropdown 处理 */
+  .search-drop-list {
+    padding: 4px;
+  }
+
+  /* TopBar search dropdown overrides — base glass styles live in global.css */
+  .search-drop-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text-primary);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .search-drop-item:hover {
+    background: var(--brand-a15);
+    transform: translateX(2px);
+  }
+  .search-drop-cover {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .search-drop-item:hover .search-drop-cover {
+    transform: scale(1.06);
+  }
+  .search-drop-cover-ph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--brand);
+    background: linear-gradient(135deg, var(--brand-a15), var(--brand-a20));
+    border: 1px solid var(--brand-a25);
+  }
+  /* 标题容器 — 超长标题自动轮播展示 */
+  .search-drop-title {
+    font-weight: 500;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    flex: 1;
+    min-width: 0;
+    transition: color 0.25s;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .search-drop-item:hover .search-drop-title {
+    color: var(--brand);
+  }
+  /* marquee 轮播动画 — 内容重复两份实现无缝滚动 */
+  .search-title-marquee {
+    display: inline-block;
+    white-space: nowrap;
+    animation: search-marquee 8s linear infinite;
+  }
+  @keyframes search-marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  .search-drop-empty { padding: 20px; text-align: center; font-size: 0.8rem; color: var(--text-tertiary); letter-spacing: 0.02em; }
+  .search-drop-loading { padding: 16px; text-align: center; font-size: 0.8rem; color: var(--text-tertiary); }
+
+  /* 关键词高亮 — 渐变底色标注笔效果 + 品牌色文字 */
+  .search-hl {
+    color: var(--brand);
+    font-weight: 700;
+    background: linear-gradient(180deg, transparent 55%, var(--brand-a25) 55%, var(--brand-a15) 100%);
+    border-radius: 2px;
+    padding: 0 1px;
+    margin: 0 1px;
+  }
+
+  /* 无限滚动加载指示器 */
+  .search-drop-loader {
+    padding: 12px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .search-drop-loader::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--brand-a25);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: search-spin 0.6s linear infinite;
+  }
+  @keyframes search-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* 到底提示 */
+  .search-drop-end {
+    padding: 12px;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--text-tertiary);
+    letter-spacing: 0.03em;
+    opacity: 0.7;
+  }
+</style>

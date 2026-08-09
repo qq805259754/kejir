@@ -1,0 +1,729 @@
+---
+/**
+ * 管理后台 - 相册管理 - /admin/site-album
+ * 接口：GET /sys/album/list | POST /sys/album/add | PUT /sys/album/update | DELETE /sys/album/delete/{ids}
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="相册管理" description="相册管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>相册管理</h1>
+      <p class="page-sub">管理站点相册，支持公开 / 私密相册与访问密码</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-name">名称</label>
+        <input type="text" id="search-name" class="glass-input" placeholder="请输入相册名称" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+
+    // ===== 登录状态检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    // ===== 页面状态 =====
+    var state = {
+      pageNum: 1,
+      pageSize: 10,
+      total: 0,
+      query: { name: '' },
+      loading: false,
+      selectedIds: [],
+      list: [],
+    };
+
+    // 状态徽章：isLock 1 私密 / 0 公开
+    function statusBadge(isLock) {
+      var s = Number(isLock);
+      if (s === 1) return Admin.badge('私密', 'warning');
+      if (s === 0) return Admin.badge('公开', 'success');
+      return Admin.badge('未知', 'default');
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'cover', title: '封面', width: '90px', align: 'center',
+        render: function (row) { return Admin.thumbImg(row.cover, row.name); }
+      },
+      {
+        key: 'name', title: '名称',
+        render: function (row) { return '<span style="font-weight:600;">' + Admin.esc(row.name) + '</span>'; }
+      },
+      {
+        key: 'description', title: '描述',
+        render: function (row) {
+          var d = row.description || '';
+          return d.length > 40 ? Admin.esc(d.slice(0, 40)) + '…' : Admin.esc(d);
+        }
+      },
+      {
+        key: 'isLock', title: '状态', width: '90px', align: 'center',
+        render: function (row) { return statusBadge(row.isLock); }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '160px',
+        render: function (row) { return Admin.formatDate(row.createTime, true); }
+      },
+      {
+        title: '操作', width: '210px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('查看照片', 'act-view', null, row.id) +
+            Admin.actBtn('修改', 'act-edit', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== 加载列表 =====
+    function loadList() {
+      if (state.loading) return;
+      state.loading = true;
+      Admin.showLoading(tableContainer);
+      var params = {
+        pageNum: state.pageNum,
+        pageSize: state.pageSize,
+        name: state.query.name,
+      };
+      Admin.api.get('/sys/album/list', params).then(function (data) {
+        state.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && state.pageNum > 1) {
+          var tp = Math.ceil(page.total / state.pageSize) || 1;
+          state.pageNum = Math.min(state.pageNum - 1, tp);
+          if (state.pageNum < 1) state.pageNum = 1;
+          return loadList();
+        }
+        state.list = page.list;
+        state.total = page.total;
+        Admin.renderTable(tableContainer, columns, page.list, {
+          emptyText: '暂无相册数据',
+          onSelectionChange: function (ids) { state.selectedIds = ids; }
+        });
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          }
+        });
+      }).catch(function (err) {
+        state.loading = false;
+        Admin.showError(tableContainer, err.message);
+      });
+    }
+
+    // ===== 搜索 / 重置 =====
+    function doSearch() {
+      state.query.name = (document.getElementById('search-name').value || '').trim();
+      state.pageNum = 1;
+      loadList();
+    }
+    function doReset() {
+      document.getElementById('search-name').value = '';
+      state.query.name = '';
+      state.pageNum = 1;
+      loadList();
+    }
+
+    // ===== 弹窗表单 =====
+    function formHtml() {
+      return '<form id="edit-form">' +
+        '<div class="admin-form-group">' +
+          '<label>名称 <span class="req">*</span></label>' +
+          '<input type="text" name="name" class="glass-input" placeholder="请输入相册名称" required />' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>描述</label>' +
+          '<textarea name="description" class="glass-input" placeholder="请输入相册描述"></textarea>' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>封面图片</label>' +
+          '<div id="cover-upload"></div>' +
+          '<input type="hidden" name="cover" />' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>是否加密</label>' +
+          '<select name="isLock" class="glass-input" id="form-isLock">' +
+            '<option value="0">公开</option>' +
+            '<option value="1">私密</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="admin-form-group" id="password-group" style="display:none;">' +
+          '<label>访问密码</label>' +
+          '<input type="text" name="password" class="glass-input" placeholder="私密相册访问密码" />' +
+        '</div>' +
+      '</form>';
+    }
+
+    // ===== 新增 / 编辑弹窗 =====
+    function openEditModal(row) {
+      var isEdit = !!row;
+      Admin.openModal({
+        title: isEdit ? '修改相册' : '新增相册',
+        body: formHtml(),
+        footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>',
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          var statusSel = modal.querySelector('#form-isLock');
+          var pwdGroup = modal.querySelector('#password-group');
+          function togglePwd() {
+            pwdGroup.style.display = (statusSel.value === '1') ? '' : 'none';
+          }
+          statusSel.addEventListener('change', togglePwd);
+          // 封面上传组件（回显 + 上传）
+          var coverInput = form.querySelector('[name="cover"]');
+          var coverVal = isEdit ? (row.cover || '') : '';
+          coverInput.value = coverVal;
+          Admin.createUploadField({
+            container: modal.querySelector('#cover-upload'),
+            value: coverVal,
+            source: 'album',
+            onChange: function (url) { coverInput.value = url || ''; }
+          });
+          if (isEdit) {
+            Admin.fillForm(form, row);
+          }
+          togglePwd();
+
+          var saveBtn = modal.querySelector('#btn-save');
+          saveBtn.addEventListener('click', function () {
+            if (!form.name.value.trim()) {
+              Admin.toast('请输入相册名称', 'error');
+              return;
+            }
+            var data = Admin.serializeForm(form);
+            data.isLock = Number(data.isLock) || 0;
+            // 公开相册清空密码
+            if (data.isLock !== 1) data.password = '';
+            var promise;
+            if (isEdit) {
+              data.id = row.id;
+              promise = Admin.api.put('/sys/album/update', data);
+            } else {
+              promise = Admin.api.post('/sys/album/add', data);
+            }
+            saveBtn.disabled = true;
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              loadList();
+            }).catch(function (err) {
+              saveBtn.disabled = false;
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        }
+      });
+    }
+
+    // ===== 删除 =====
+    function handleDelete(id) {
+      Admin.confirm('确定要删除该相册吗？', function () {
+        Admin.api.del('/sys/album/delete/' + encodeURIComponent(id)).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 批量删除 =====
+    function handleBatchDelete() {
+      var ids = state.selectedIds;
+      if (!ids || ids.length === 0) {
+        Admin.toast('请先选择要删除的数据', 'info');
+        return;
+      }
+      Admin.confirm('确定要删除选中的 ' + ids.length + ' 条数据吗？', function () {
+        Admin.api.del('/sys/album/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+          Admin.toast('批量删除成功', 'success');
+          state.selectedIds = [];
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '批量删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 从当前列表中按 id 查找行 =====
+    function findRowById(id) {
+      for (var i = 0; i < state.list.length; i++) {
+        if (String(state.list[i].id) === String(id)) return state.list[i];
+      }
+      return null;
+    }
+
+    // ============================================================
+    // ===== 照片管理弹窗 =====
+    // ============================================================
+    var photoState = {
+      album: null,
+      pageNum: 1,
+      pageSize: 12,
+      total: 0,
+      list: [],
+      selectedIds: [],
+      loading: false,
+    };
+
+    function photoEsc(s) { return Admin.esc(s); }
+
+    // 渲染照片卡片网格
+    function renderPhotoGrid(container) {
+      if (!photoState.list.length) {
+        container.innerHTML = '<div class="admin-empty"><p>暂无照片，点击「新增」上传</p></div>';
+        return;
+      }
+      var html = '<div class="photo-grid">';
+      photoState.list.forEach(function (item) {
+        var checked = photoState.selectedIds.indexOf(String(item.id)) !== -1 ? ' checked' : '';
+        var time = item.recordTime ? Admin.formatDate(item.recordTime) : '';
+        var desc = item.description || '';
+        html += '<div class="photo-card" data-id="' + photoEsc(item.id) + '">' +
+          '<span class="photo-select"><input type="checkbox" class="photo-check" value="' + photoEsc(item.id) + '"' + checked + ' /></span>' +
+          '<img class="photo-image" src="' + photoEsc(item.url || '') + '" alt="" onerror="this.style.opacity=0.2" />' +
+          '<div class="photo-overlay">' +
+            '<div class="photo-content">' +
+              (time ? '<div class="photo-time">' + photoEsc(time) + '</div>' : '') +
+              (desc ? '<div class="photo-desc">' + photoEsc(desc) + '</div>' : '') +
+            '</div>' +
+            '<div class="photo-actions">' +
+              Admin.actBtn('查看', 'act-view', null, item.id) +
+              Admin.actBtn('编辑', 'act-edit', null, item.id) +
+              Admin.actBtn('删除', 'act-del', null, item.id) +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+      // 卡片内操作事件委托
+      container.addEventListener('click', photoGridClickHandler);
+      // 选择事件
+      container.querySelectorAll('.photo-check').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          var id = cb.value;
+          var idx = photoState.selectedIds.indexOf(id);
+          if (cb.checked && idx === -1) photoState.selectedIds.push(id);
+          if (!cb.checked && idx !== -1) photoState.selectedIds.splice(idx, 1);
+        });
+      });
+    }
+
+    function photoGridClickHandler(e) {
+      var btn = e.target.closest('[data-id]');
+      if (!btn) return;
+      // 避免点击 checkbox 触发
+      if (e.target.classList.contains('photo-check')) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-view')) {
+        var row = findPhotoById(id);
+        if (row && row.url) {
+          Admin.openModal({
+            title: '照片预览',
+            body: '<div style="text-align:center;"><img src="' + photoEsc(row.url) + '" alt="" style="max-width:100%;border-radius:8px;" /></div>' +
+              (row.description ? '<p style="margin-top:12px;color:var(--text-secondary);font-size:0.88rem;">' + photoEsc(row.description) + '</p>' : ''),
+            footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>关闭</button>'
+          });
+        }
+      } else if (btn.classList.contains('act-edit')) {
+        var row2 = findPhotoById(id);
+        if (row2) showPhotoFormView(row2);
+      } else if (btn.classList.contains('act-del')) {
+        handlePhotoDelete(id);
+      }
+    }
+
+    function findPhotoById(id) {
+      for (var i = 0; i < photoState.list.length; i++) {
+        if (String(photoState.list[i].id) === String(id)) return photoState.list[i];
+      }
+      return null;
+    }
+
+    function loadPhotoList() {
+      if (!photoState.album) return;
+      photoState.loading = true;
+      var gridEl = document.getElementById('photo-grid');
+      var pageEl = document.getElementById('photo-pagination');
+      if (gridEl) Admin.showLoading(gridEl);
+      Admin.api.get('/sys/photo/list', {
+        pageNum: photoState.pageNum,
+        pageSize: photoState.pageSize,
+        albumId: photoState.album.id,
+      }).then(function (data) {
+        photoState.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && photoState.pageNum > 1) {
+          var tp = Math.ceil(page.total / photoState.pageSize) || 1;
+          photoState.pageNum = Math.min(photoState.pageNum - 1, tp);
+          if (photoState.pageNum < 1) photoState.pageNum = 1;
+          return loadPhotoList();
+        }
+        photoState.list = page.list;
+        photoState.total = page.total;
+        photoState.selectedIds = [];
+        renderPhotoGrid(gridEl);
+        if (pageEl) {
+          Admin.renderPagination(pageEl, {
+            current: photoState.pageNum,
+            pageSize: photoState.pageSize,
+            total: photoState.total,
+            onChange: function (pageNum, pageSize) {
+              photoState.pageNum = pageNum;
+              photoState.pageSize = pageSize;
+              loadPhotoList();
+            }
+          });
+        }
+      }).catch(function (err) {
+        photoState.loading = false;
+        if (gridEl) Admin.showError(gridEl, err.message);
+      });
+    }
+
+    function photoFormHtml() {
+      return '<form id="photo-form">' +
+        '<div class="admin-form-group">' +
+          '<label>封面 <span class="req">*</span></label>' +
+          '<div id="photo-upload"></div>' +
+          '<input type="hidden" name="url" />' +
+        '</div>' +
+        '<div class="admin-form-group">' +
+          '<label>描述 <span class="req">*</span></label>' +
+          '<textarea name="description" class="glass-input" placeholder="请输入照片描述" required></textarea>' +
+        '</div>' +
+        '<div class="admin-form-row">' +
+          '<div class="admin-form-group">' +
+            '<label>记录时间</label>' +
+            '<input type="date" name="recordTime" class="glass-input" />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>排序</label>' +
+            '<input type="number" name="sort" class="glass-input" min="1" value="1" data-type="number" />' +
+          '</div>' +
+        '</div>' +
+      '</form>';
+    }
+
+    // 照片表单以内联视图方式展示，避免嵌套弹窗
+    function showPhotoFormView(row) {
+      var isEdit = !!row;
+      var modal = document.getElementById('admin-modal-active');
+      if (!modal) return;
+      var listView = modal.querySelector('#photo-list-view');
+      var formView = modal.querySelector('#photo-form-view');
+      formView.innerHTML = '<h4 class="photo-form-title">' + (isEdit ? '修改照片' : '新增照片') + '</h4>' + photoFormHtml() +
+        '<div class="admin-modal-footer" style="border:none;padding:0;margin-top:var(--sp-3);">' +
+          '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-photo-cancel">取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-photo-save">保存</button>' +
+        '</div>';
+      var form = formView.querySelector('#photo-form');
+      var urlInput = form.querySelector('[name="url"]');
+      var urlVal = isEdit ? (row.url || '') : '';
+      urlInput.value = urlVal;
+      Admin.createUploadField({
+        container: formView.querySelector('#photo-upload'),
+        value: urlVal,
+        source: 'photo',
+        onChange: function (url) { urlInput.value = url || ''; }
+      });
+      if (isEdit) Admin.fillForm(form, row);
+      listView.style.display = 'none';
+      formView.style.display = '';
+      formView.querySelector('#btn-photo-cancel').addEventListener('click', function () {
+        formView.style.display = 'none';
+        listView.style.display = '';
+      });
+      var saveBtn = formView.querySelector('#btn-photo-save');
+      saveBtn.addEventListener('click', function () {
+        if (!urlInput.value.trim()) { Admin.toast('请上传照片封面', 'error'); return; }
+        if (!form.description.value.trim()) { Admin.toast('请输入照片描述', 'error'); return; }
+        var data = Admin.serializeForm(form);
+        data.albumId = photoState.album.id;
+        var promise;
+        if (isEdit) {
+          data.id = row.id;
+          promise = Admin.api.put('/sys/photo/update', data);
+        } else {
+          promise = Admin.api.post('/sys/photo/add', data);
+        }
+        saveBtn.disabled = true;
+        promise.then(function () {
+          Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+          formView.style.display = 'none';
+          listView.style.display = '';
+          loadPhotoList();
+        }).catch(function (err) {
+          saveBtn.disabled = false;
+          Admin.toast(err.message || '保存失败', 'error');
+        });
+      });
+    }
+
+    function handlePhotoDelete(id) {
+      Admin.confirm('确定要删除该照片吗？', function () {
+        Admin.api.del('/sys/photo/delete/' + encodeURIComponent(id)).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadPhotoList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    }
+
+    function handlePhotoBatchDelete() {
+      var ids = photoState.selectedIds;
+      if (!ids || ids.length === 0) { Admin.toast('请先选择要删除的照片', 'info'); return; }
+      Admin.confirm('确定要删除选中的 ' + ids.length + ' 张照片吗？', function () {
+        Admin.api.del('/sys/photo/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+          Admin.toast('批量删除成功', 'success');
+          photoState.selectedIds = [];
+          loadPhotoList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '批量删除失败', 'error');
+        });
+      });
+    }
+
+    // 全选/反选
+    function handlePhotoToggleAll() {
+      var allIds = photoState.list.map(function (p) { return String(p.id); });
+      if (photoState.selectedIds.length === allIds.length) {
+        photoState.selectedIds = [];
+      } else {
+        photoState.selectedIds = allIds.slice();
+      }
+      var gridEl = document.getElementById('photo-grid');
+      gridEl.querySelectorAll('.photo-check').forEach(function (cb) {
+        cb.checked = photoState.selectedIds.indexOf(cb.value) !== -1;
+      });
+    }
+
+    function openPhotosModal(albumRow) {
+      photoState.album = albumRow;
+      photoState.pageNum = 1;
+      photoState.pageSize = 12;
+      photoState.selectedIds = [];
+      Admin.openModal({
+        title: '相册照片 - ' + (albumRow.name || ''),
+        width: '900px',
+        body: '<div class="photo-wrap">' +
+          '<div id="photo-list-view">' +
+            '<div class="admin-toolbar">' +
+              '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-photo-add">' +
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增</button>' +
+              '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-photo-batch-del">' +
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>批量删除</button>' +
+              '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-photo-toggle-all">' +
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>全/反选</button>' +
+            '</div>' +
+            '<div id="photo-grid"></div>' +
+            '<div id="photo-pagination"></div>' +
+          '</div>' +
+          '<div id="photo-form-view" style="display:none;"></div>' +
+        '</div>',
+        footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>关闭</button>',
+        onOpen: function (modal) {
+          modal.querySelector('#btn-photo-add').addEventListener('click', function () { showPhotoFormView(null); });
+          modal.querySelector('#btn-photo-batch-del').addEventListener('click', handlePhotoBatchDelete);
+          modal.querySelector('#btn-photo-toggle-all').addEventListener('click', handlePhotoToggleAll);
+          loadPhotoList();
+        }
+      });
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () { openEditModal(null); });
+    document.getElementById('btn-batch-del').addEventListener('click', handleBatchDelete);
+    document.getElementById('search-name').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+    // 表格操作事件委托
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-view')) {
+        var row0 = findRowById(id);
+        if (row0) openPhotosModal(row0);
+      } else if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openEditModal(row);
+      } else if (btn.classList.contains('act-del')) {
+        handleDelete(id);
+      }
+    });
+
+    // ===== 初始化 =====
+    loadList();
+    }
+  })();
+</script>
+
+<style>
+  /* ===== 照片卡片网格 ===== */
+  .photo-wrap .admin-toolbar { margin-bottom: var(--sp-3); }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-3);
+  }
+  .photo-card {
+    position: relative;
+    border-radius: var(--r-sm, 10px);
+    overflow: hidden;
+    border: 1px solid var(--lg-border-subtle, var(--border));
+    background: var(--lg-bg-subtle, var(--surface));
+    aspect-ratio: 4 / 3;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+  .flat .photo-card { border-color: var(--border); background: var(--surface); }
+  .photo-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  }
+  .photo-card:hover .photo-overlay { opacity: 1; }
+  .photo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo-select {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .photo-select input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--brand);
+    cursor: pointer;
+  }
+  .photo-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.7) 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .photo-content {
+    padding: 14px 12px 0;
+    color: #fff;
+  }
+  .photo-time {
+    font-size: 0.76rem;
+    margin-bottom: 6px;
+    opacity: 0.92;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+  }
+  .photo-desc {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+  }
+  .photo-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+  }
+  .photo-actions .act-view,
+  .photo-actions .act-edit,
+  .photo-actions .act-del {
+    color: #fff;
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(255,255,255,0.25);
+    font-size: 0.74rem;
+    padding: 3px 8px;
+  }
+  .photo-actions .act-edit { background: rgba(59,130,246,0.35); border-color: rgba(59,130,246,0.5); }
+  .photo-actions .act-del { background: rgba(239,68,68,0.35); border-color: rgba(239,68,68,0.5); }
+  .photo-form-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--sp-4);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .flat .photo-form-title { border-bottom-color: var(--border); }
+  @media (max-width: 768px) {
+    .photo-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  }
+</style>

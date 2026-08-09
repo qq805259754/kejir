@@ -1,0 +1,57 @@
+# ==========================================================================
+# 科技热 - Nginx 自定义镜像
+# 彻底解决 CentOS 7 SELinux + entrypoint 问题
+# 优化点：静态资源与 SSL 证书统一放到 /usr/local/nginx、非 root 运行、目录权限
+# ==========================================================================
+FROM docker.m.daocloud.io/library/nginx:alpine
+
+# 1. 删除官方 entrypoint 脚本目录
+RUN rm -rf /docker-entrypoint.d/
+
+# 2. 直接覆盖 entrypoint.sh 为最小启动脚本（双保险：即使 ENTRYPOINT 没清空也只执行 nginx）
+RUN printf '#!/bin/sh\nexec nginx -g "daemon off;"\n' > /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+
+# 3. 复制 Nginx 配置
+COPY nginx-main.conf /etc/nginx/nginx.conf
+COPY nginx-kejir.conf /etc/nginx/conf.d/default.conf
+
+# 4. 创建统一项目目录并设置基础权限
+#    /usr/local/nginx/kejir/dist/client —— 静态资源
+#    /usr/local/nginx/ssl               —— SSL 证书
+#    /usr/local/nginx/logs              —— Nginx 日志
+RUN mkdir -p /usr/local/nginx/kejir/dist/client \
+    /usr/local/nginx/ssl \
+    /usr/local/nginx/logs \
+    /var/cache/nginx \
+    /var/lib/nginx/tmp
+
+# 5. 复制静态资源与 SSL 证书到镜像内（无挂载模式）
+#    -----------------------------------------------------------------
+#    目录约定：
+#    - 项目文件存放在 /usr/local/nginx/kejir/
+#    - SSL 证书存放在 /usr/local/nginx/kejir/ssl/
+#    - Dockerfile.nginx 直接把证书复制到镜像内 /usr/local/nginx/ssl/
+#    -----------------------------------------------------------------
+COPY dist/client/ /usr/local/nginx/kejir/dist/client/
+COPY ssl/ /usr/local/nginx/ssl/
+
+# 6. 检查 SSL 证书是否已正确复制（证书缺失时立即失败）
+RUN test -f /usr/local/nginx/ssl/kejir.com_bundle.pem && \
+    test -f /usr/local/nginx/ssl/kejir.com.key || \
+    (echo "ERROR: SSL 证书缺失。请确认构建上下文中的 ssl/ 目录包含 kejir.com_bundle.pem 和 kejir.com.key" && exit 1)
+
+# 7. 修正目录属主与权限
+#    - nginx 用户运行，需要读取静态资源和证书
+#    - 静态资源：可读可执行
+#    - SSL 目录：仅 nginx 用户可读写，防止私钥泄露
+RUN chown -R nginx:nginx /usr/local/nginx /var/cache/nginx /var/lib/nginx/tmp && \
+    chmod -R u+rwX,go+rX /usr/local/nginx/kejir && \
+    chmod -R u+rwX,go-rwx /usr/local/nginx/ssl && \
+    chmod 755 /usr/local/nginx /usr/local/nginx/logs /var/cache/nginx /var/lib/nginx/tmp
+
+EXPOSE 80 443
+STOPSIGNAL SIGQUIT
+
+# 8. 清空 ENTRYPOINT，直接启动 nginx
+ENTRYPOINT []
+CMD ["nginx", "-g", "daemon off;"]

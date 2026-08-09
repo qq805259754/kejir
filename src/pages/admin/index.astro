@@ -1,0 +1,552 @@
+---
+/**
+ * 管理后台首页 - /admin
+ * 页面形式展示后台菜单树（调用 /sys/menu/routers）
+ * PC端：与个人中心菜单风格一致（profile-menu-item 网格布局）
+ * 移动端：与"我的"页面菜单风格一致（me-item 列表布局）
+ * 返回逻辑：from=profile 返回个人中心，from=me 返回我的页面，无 from 返回首页
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="管理后台" description="管理后台" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <h1>管理后台</h1>
+      <p class="page-sub">选择功能模块进入对应管理页面</p>
+    </div>
+
+    <!-- 返回按钮（JS 动态设置 href） -->
+    <div class="admin-toolbar">
+      <a href="/" id="admin-back-btn" class="back-btn admin-back-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        <span id="admin-back-text">返回首页</span>
+      </a>
+    </div>
+
+    <!-- 菜单加载容器 -->
+    <div id="admin-menu-container" class="admin-menu-container">
+      <div class="admin-menu-loading">
+        <div class="admin-loading-spinner"></div>
+        <p>正在加载后台菜单...</p>
+      </div>
+    </div>
+
+    <!-- 未登录提示 -->
+    <div id="admin-login-hint" class="admin-login-hint glass-card" style="display:none;">
+      <div class="admin-hint-icon">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <h3>需要登录后访问</h3>
+      <p>请先登录管理员账号再进入后台管理</p>
+      <a href="/login?redirect=/admin" class="glass-btn glass-btn-primary">立即登录</a>
+    </div>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .admin-page { max-width: 900px; }
+
+  .admin-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-5);
+  }
+  .admin-back-btn {
+    /* .back-btn 已提供基础样式，这里仅做微调 */
+    padding: 7px 14px;
+  }
+
+  /* 加载状态 */
+  .admin-menu-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-4);
+    padding: var(--sp-10) var(--sp-4);
+    color: var(--text-tertiary);
+  }
+  .admin-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid var(--glass-border-subtle, var(--border));
+    border-top-color: var(--brand);
+    animation: admin-spin 0.8s linear infinite;
+  }
+  .flat .admin-loading-spinner {
+    border-color: var(--border);
+    border-top-color: var(--brand);
+  }
+  @keyframes admin-spin { to { transform: rotate(360deg); } }
+
+  /* 菜单容器 */
+  .admin-menu-container { display: flex; flex-direction: column; gap: var(--sp-5); }
+
+  /* ===== 菜单分组标题 ===== */
+  .admin-group-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0 var(--sp-1);
+    margin-bottom: var(--sp-3);
+  }
+  .admin-group-header svg {
+    width: 16px;
+    height: 16px;
+    color: var(--brand);
+    flex-shrink: 0;
+  }
+
+  /* ===== PC 端菜单网格（复用 profile-menu-item 风格） ===== */
+  .admin-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--sp-3);
+  }
+  .admin-menu-card {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    backdrop-filter: var(--lg-refract-sm) blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow: inset 1px 1px 0.5px rgba(255,255,255,0.2), 0 2px 6px rgba(0,0,0,0.02);
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: all var(--dur-fast);
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .flat .admin-menu-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .admin-menu-card:hover {
+    background: var(--brand-a15);
+    color: var(--brand);
+    border-color: var(--brand-a25);
+    transform: translateY(-2px);
+  }
+  .admin-menu-card svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    flex-shrink: 0;
+  }
+  .admin-menu-card-label {
+    font-weight: 500;
+    color: inherit;
+  }
+  .admin-menu-card-arrow {
+    margin-left: auto;
+    color: var(--text-tertiary);
+    font-size: 1.1rem;
+    font-weight: 300;
+  }
+
+  /* 错误状态 */
+  .admin-menu-error {
+    text-align: center;
+    padding: var(--sp-10) var(--sp-4);
+    color: var(--text-tertiary);
+  }
+  .admin-menu-error p { margin-bottom: var(--sp-4); }
+  .admin-menu-error .glass-btn { display: inline-flex; }
+
+  /* 未登录提示 */
+  .admin-login-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-10) var(--sp-6);
+    text-align: center;
+  }
+  .admin-hint-icon {
+    color: var(--text-tertiary);
+    margin-bottom: var(--sp-2);
+  }
+  .admin-login-hint h3 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .admin-login-hint p {
+    color: var(--text-tertiary);
+    font-size: 0.88rem;
+  }
+  .admin-login-hint .glass-btn { margin-top: var(--sp-2); }
+
+  /* ===== 移动端菜单（复用 me-item / me-group 风格） ===== */
+  .admin-me-group {
+    background:
+      radial-gradient(circle 120px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.05), transparent 60%),
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    border-radius: 16px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow: inset 1px 1px 0.5px rgba(255,255,255,0.18), 0 2px 8px rgba(0,0,0,0.04);
+    width: 100%;
+    position: relative;
+  }
+  .flat .admin-me-group {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .admin-me-group-title {
+    padding: 10px 16px 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .admin-me-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--lg-border-subtle);
+  }
+  .admin-me-item:last-child { border-bottom: none; }
+  .admin-me-item:active { background: rgba(255,255,255,0.05); }
+  .flat .admin-me-item { border-bottom-color: var(--border); }
+  .flat .admin-me-item:last-child { border-bottom: none; }
+  .admin-me-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--brand-a20), var(--brand-a10));
+    color: var(--brand);
+  }
+  .flat .admin-me-icon { background: var(--brand-a08); color: var(--brand); }
+  .admin-me-icon svg { width: 17px; height: 17px; }
+  .admin-me-label {
+    flex: 1;
+    font-size: 0.93rem;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .admin-me-arrow {
+    color: var(--text-tertiary);
+    font-size: 1.2rem;
+    font-weight: 300;
+    line-height: 1;
+  }
+
+  /* PC 端隐藏移动端菜单，移动端隐藏 PC 端菜单 */
+  .admin-menu-grid { display: grid; }
+  .admin-me-group { display: none; }
+
+  @media (max-width: 768px) {
+    .admin-menu-grid { display: none; }
+    .admin-me-group { display: block; }
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    var container = document.getElementById('admin-menu-container');
+    var loginHint = document.getElementById('admin-login-hint');
+    var backBtn = document.getElementById('admin-back-btn');
+    var backText = document.getElementById('admin-back-text');
+
+    // ===== 返回按钮逻辑 =====
+    var params = new URLSearchParams(window.location.search);
+    var from = params.get('from');
+    if (from === 'profile') {
+      if (backBtn) backBtn.href = '/profile';
+      if (backText) backText.textContent = '返回个人中心';
+    } else if (from === 'me') {
+      if (backBtn) backBtn.href = '/about';
+      if (backText) backText.textContent = '返回我的';
+    } else {
+      if (backBtn) backBtn.href = '/';
+      if (backText) backText.textContent = '返回首页';
+    }
+
+    // 判断是否移动端
+    var isMobile = window.matchMedia('(max-width: 768px)').matches;
+
+    // Element Plus 图标 → SVG 路径映射
+    var iconMap = {
+      'Document': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+      'DocumentRemove': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/>',
+      'PriceTag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+      'Dessert': '<path d="M12 2a8 8 0 0 0-8 8c0 4 3 6 3 10h10c0-4 3-6 3-10a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/>',
+      'ChatDotRound': '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><circle cx="12" cy="12" r="1"/>',
+      'Setting': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'User': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      'Menu': '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+      'Histogram': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+      'Link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      'Message': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      'Edit': '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+      'Delete': '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      'View': '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+      'Refresh': '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+      'Folder': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+      'Operation': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'Picture': '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+      'Bell': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+      'Tree': '<path d="M12 2l3 6h-2v4h4v-2l6 3-6 3v-2h-4v4h2l-3 6-3-6h2v-4H7v2l-6-3 6-3v-2h4V8h-2z"/>',
+      'Files': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+      'Monitor': '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+      'Tools': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+      'Cpu': '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+      'Clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      'Connection': '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+      'Code': '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'
+    };
+
+    function getIcon(name) {
+      var path = iconMap[name] || iconMap['Menu'];
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>';
+    }
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // 后端菜单路径 → Astro 实际页面路径映射
+    var pathMap = {
+      'article': '/admin/article',
+      'article/index': '/admin/article',
+      'article/article': '/admin/article',
+      'article/tag': '/admin/article-tag',
+      'article/category': '/admin/article-category',
+      'article/moment': '/admin/article-moment',
+      'moments': '/admin/article-moment',
+      'site': '/admin/site-config',
+      'site/index': '/admin/site-config',
+      'site/album': '/admin/site-album',
+      'site/config': '/admin/site-config',
+      'site/friend': '/admin/site-friend',
+      'site/notice': '/admin/site-notice',
+      'album': '/admin/site-album',
+      'notice': '/admin/site-notice',
+      'message': '/admin/message-comment',
+      'message/index': '/admin/message-comment',
+      'message/comment': '/admin/message-comment',
+      'message/message': '/admin/message-message',
+      'message/feedback': '/admin/message-feedback',
+      'comment': '/admin/message-comment',
+      'comment/index': '/admin/message-comment',
+      'comment/comment': '/admin/message-comment',
+      'comment/message': '/admin/message-message',
+      'comment/feedback': '/admin/message-feedback',
+      'system': '/admin/system-user',
+      'system/index': '/admin/system-user',
+      'system/user': '/admin/system-user',
+      'system/role': '/admin/system-role',
+      'system/menu': '/admin/system-menu',
+      'system/log': '/admin/system-log',
+      'system/operLog': '/admin/system-log',
+      'system/dict': '/admin/system-dict',
+      'dict': '/admin/system-dict',
+      'monitor': '/admin/monitor-server',
+      'monitor/index': '/admin/monitor-server',
+      'monitor/server': '/admin/monitor-server',
+      'monitor/cache': '/admin/monitor-cache',
+      'monitor/online': '/admin/monitor-online',
+      'monitor/job': '/admin/monitor-job',
+      'tool': '/admin/tool-gen',
+      'tool/index': '/admin/tool-gen',
+      'tool/gen': '/admin/tool-gen'
+    };
+
+    function getHref(menu, parent) {
+      var cPath = menu.path || '';
+      var fullPath = cPath;
+      if (cPath && cPath.charAt(0) !== '/' && parent && parent.path) {
+        fullPath = parent.path + '/' + cPath;
+      } else if (!cPath && menu.redirect) {
+        fullPath = menu.redirect;
+      }
+      var isExternal = (menu.meta && menu.meta.isExternal) || false;
+      if (isExternal) return fullPath;
+      // 去掉开头斜杠后查映射表
+      var cleanPath = fullPath.replace(/^\/+/, '');
+      if (pathMap[cleanPath]) return pathMap[cleanPath];
+      // 子路径为 index 时，回退到父路径映射
+      if (cPath === 'index' && parent && parent.path) {
+        var parentPath = parent.path.replace(/^\/+/, '');
+        if (pathMap[parentPath]) return pathMap[parentPath];
+      }
+      // 未映射的路径，回退到 hash 方式
+      return '/admin#' + fullPath;
+    }
+
+    function getTarget(menu) {
+      var isExternal = (menu.meta && menu.meta.isExternal) || false;
+      return isExternal ? ' target="_blank" rel="noopener"' : '';
+    }
+
+    // PC 端渲染：profile-menu-item 风格
+    function renderPC(menus) {
+      if (!menus || !menus.length) {
+        container.innerHTML = '<div class="admin-menu-error glass-card"><p>暂无菜单权限</p><a href="/" class="glass-btn glass-btn-ghost">返回首页</a></div>';
+        return;
+      }
+      menus.sort(function(a, b) { return (a.sort || 0) - (b.sort || 0); });
+      var html = '';
+      menus.forEach(function(menu) {
+        if (menu.meta && menu.meta.hidden) return;
+        var title = (menu.meta && menu.meta.title) || menu.name || menu.path;
+        var icon = (menu.meta && menu.meta.icon) || 'Menu';
+        var children = (menu.children || []).filter(function(c) { return !(c.meta && c.meta.hidden); });
+
+        if (children.length > 0) {
+          html += '<div class="admin-menu-group">';
+          html += '<div class="admin-group-header">' + getIcon(icon) + '<span>' + esc(title) + '</span></div>';
+          html += '<div class="admin-menu-grid">';
+          children.sort(function(a, b) { return (a.sort || 0) - (b.sort || 0); });
+          children.forEach(function(child) {
+            var cTitle = (child.meta && child.meta.title) || child.name || child.path;
+            var cIcon = (child.meta && child.meta.icon) || 'Menu';
+            var href = getHref(child, menu);
+            var target = getTarget(child);
+            html += '<a href="' + esc(href) + '"' + target + ' class="admin-menu-card">';
+            html += getIcon(cIcon);
+            html += '<span class="admin-menu-card-label">' + esc(cTitle) + '</span>';
+            html += '<span class="admin-menu-card-arrow">›</span>';
+            html += '</a>';
+          });
+          html += '</div>';
+          html += '</div>';
+        } else if (!menu.children || menu.children.length === 0) {
+          var href = getHref(menu, null);
+          var target = getTarget(menu);
+          html += '<div class="admin-menu-group">';
+          html += '<div class="admin-group-header">' + getIcon(icon) + '<span>' + esc(title) + '</span></div>';
+          html += '<div class="admin-menu-grid">';
+          html += '<a href="' + esc(href) + '"' + target + ' class="admin-menu-card">';
+          html += getIcon(icon);
+          html += '<span class="admin-menu-card-label">' + esc(title) + '</span>';
+          html += '<span class="admin-menu-card-arrow">›</span>';
+          html += '</a>';
+          html += '</div>';
+          html += '</div>';
+        }
+      });
+      container.innerHTML = html;
+    }
+
+    // 移动端渲染：me-item 风格
+    function renderMobile(menus) {
+      if (!menus || !menus.length) {
+        container.innerHTML = '<div class="admin-menu-error glass-card"><p>暂无菜单权限</p><a href="/" class="glass-btn glass-btn-ghost">返回首页</a></div>';
+        return;
+      }
+      menus.sort(function(a, b) { return (a.sort || 0) - (b.sort || 0); });
+      var html = '';
+      menus.forEach(function(menu) {
+        if (menu.meta && menu.meta.hidden) return;
+        var title = (menu.meta && menu.meta.title) || menu.name || menu.path;
+        var icon = (menu.meta && menu.meta.icon) || 'Menu';
+        var children = (menu.children || []).filter(function(c) { return !(c.meta && c.meta.hidden); });
+
+        html += '<div class="admin-me-group">';
+        html += '<div class="admin-me-group-title">' + esc(title) + '</div>';
+
+        if (children.length > 0) {
+          children.sort(function(a, b) { return (a.sort || 0) - (b.sort || 0); });
+          children.forEach(function(child) {
+            var cTitle = (child.meta && child.meta.title) || child.name || child.path;
+            var cIcon = (child.meta && child.meta.icon) || 'Menu';
+            var href = getHref(child, menu);
+            var target = getTarget(child);
+            html += '<a href="' + esc(href) + '"' + target + ' class="admin-me-item">';
+            html += '<span class="admin-me-icon">' + getIcon(cIcon) + '</span>';
+            html += '<span class="admin-me-label">' + esc(cTitle) + '</span>';
+            html += '<span class="admin-me-arrow">›</span>';
+            html += '</a>';
+          });
+        } else if (!menu.children || menu.children.length === 0) {
+          var href = getHref(menu, null);
+          var target = getTarget(menu);
+          html += '<a href="' + esc(href) + '"' + target + ' class="admin-me-item">';
+          html += '<span class="admin-me-icon">' + getIcon(icon) + '</span>';
+          html += '<span class="admin-me-label">' + esc(title) + '</span>';
+          html += '<span class="admin-me-arrow">›</span>';
+          html += '</a>';
+        }
+        html += '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    function loadMenus() {
+      var token = '';
+      try { token = localStorage.getItem('token') || ''; } catch(e) {}
+
+      if (!token) {
+        if (container) container.style.display = 'none';
+        if (loginHint) loginHint.style.display = 'flex';
+        return;
+      }
+
+      fetch('/sys/menu/routers', {
+        headers: { Authorization: token },
+        referrerPolicy: 'no-referrer-when-downgrade',
+        credentials: 'include',
+        mode: 'cors'
+      })
+        .then(function(r) {
+          return r.text().then(function(text) {
+            if (!text || text.trim() === '') return {};
+            try { return JSON.parse(text); } catch(e) { return {}; }
+          });
+        })
+        .then(function(d) {
+          if (d && d.code === 200 && d.data) {
+            if (isMobile) {
+              renderMobile(d.data);
+            } else {
+              renderPC(d.data);
+            }
+          } else if (d && d.code === 401) {
+            if (container) container.style.display = 'none';
+            if (loginHint) loginHint.style.display = 'flex';
+          } else {
+            container.innerHTML = '<div class="admin-menu-error glass-card"><p>' + esc((d && d.message) || '获取菜单失败') + '</p><button class="glass-btn glass-btn-ghost" onclick="location.reload()">重新加载</button></div>';
+          }
+        })
+        .catch(function() {
+          container.innerHTML = '<div class="admin-menu-error glass-card"><p>网络错误，请稍后重试</p><button class="glass-btn glass-btn-ghost" onclick="location.reload()">重新加载</button></div>';
+        });
+    }
+
+    // 延迟执行确保 API 就绪
+    setTimeout(loadMenus, 300);
+  })();
+</script>

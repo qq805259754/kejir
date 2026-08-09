@@ -1,0 +1,1142 @@
+---
+/**
+ * 关于/我的页面
+ * PC端：关于作者
+ * 移动端：个人中心风格，头像+昵称+简介+菜单列表
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../data/site';
+---
+
+<BaseLayout title="我的" description="关于作者" currentPath="/about">
+  <div class="content-zone about-page">
+    <!-- PC端：关于页面 -->
+    <div class="about-pc">
+      <div class="page-header">
+        <h1>关于</h1>
+        <p class="page-sub">关于作者</p>
+      </div>
+
+      <!-- 作者信息大卡片 -->
+      <div class="glass-card about-hero" id="about-intro">
+        <div class="about-hero-avatar">
+          <div class="about-avatar" id="about-avatar">{siteConfig.author.charAt(0)}</div>
+          <div class="about-avatar-ring"></div>
+        </div>
+        <div class="about-hero-info">
+          <h2 id="about-author-name">{siteConfig.author}</h2>
+          <div id="about-bio" class="about-hero-bio">{siteConfig.description}</div>
+          <div class="about-hero-tags">
+            <span class="hero-tag"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>创作者</span>
+            <span class="hero-tag"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>科技爱好者</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 关于我 -->
+      <div class="glass-card about-card">
+        <h3>
+          <span class="card-icon card-icon-info">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </span>
+          关于我
+        </h3>
+        <div class="about-me-content" id="about-me-content">加载中...</div>
+      </div>
+
+      <!-- 联系我 -->
+      <div class="glass-card about-card">
+        <h3>
+          <span class="card-icon card-icon-contact">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </span>
+          联系我
+        </h3>
+        <div class="about-contacts" id="about-contacts"></div>
+      </div>
+    </div>
+
+    <!-- 移动端：我的页面 -->
+    <div class="about-mobile">
+      <!-- 用户信息头：默认不展示头像和昵称，登录后展示登录用户信息 -->
+      <div class="me-header" id="me-header">
+        <div class="me-avatar-wrap">
+          <div class="me-avatar me-avatar-default" id="me-avatar">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+        </div>
+        <div class="me-info">
+          <h2 id="me-name">未登录</h2>
+          <p id="me-bio">登录后查看更多功能</p>
+        </div>
+      </div>
+
+      <!-- 菜单分组 -->
+      <div class="me-group" id="me-guest-group">
+        <!-- 未登录：显示登录入口（点击展开内联登录表单） -->
+        <a href="javascript:void(0)" class="me-item" id="me-login-item">
+          <span class="me-icon me-icon-brand">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </span>
+          <span class="me-label">登录</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <!-- 内联登录表单（移动端） -->
+        <div id="me-login-form" class="me-login-form" style="display:none;">
+          <div class="me-login-error" id="me-login-error" style="display:none;"></div>
+          <div class="me-login-field">
+            <input type="text" id="me-login-username" placeholder="用户名 / 邮箱" autocomplete="username" />
+          </div>
+          <div class="me-login-field">
+            <input type="password" id="me-login-password" placeholder="密码" autocomplete="current-password" />
+          </div>
+          <button type="button" class="me-login-submit" id="me-login-submit">登 录</button>
+          <a href="/register" class="me-register-link">没有账号？立即注册</a>
+        </div>
+        <!-- 未登录：注册入口 -->
+        <a href="/register" class="me-item">
+          <span class="me-icon me-icon-green">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          </span>
+          <span class="me-label">注册</span>
+          <span class="me-arrow">›</span>
+        </a>
+      </div>
+
+      <!-- 已登录：与 PC 端个人中心一致的菜单 -->
+      <div class="me-group" id="me-user-group" style="display:none;">
+        <a href="/profile?from=me" class="me-item">
+          <span class="me-icon me-icon-brand">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </span>
+          <span class="me-label">个人资料</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="/change-password?from=me" class="me-item">
+          <span class="me-icon me-icon-blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </span>
+          <span class="me-label">修改密码</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="/my-articles?from=me" class="me-item">
+          <span class="me-icon me-icon-purple">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </span>
+          <span class="me-label">我的文章</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="/my-comments?from=me" class="me-item">
+          <span class="me-icon me-icon-blue">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </span>
+          <span class="me-label">我的评论</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="/my-replies?from=me" class="me-item">
+          <span class="me-icon me-icon-green">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+          </span>
+          <span class="me-label">我的回复</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="/my-likes?from=me" class="me-item">
+          <span class="me-icon me-icon-pink">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </span>
+          <span class="me-label">我的点赞</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <!-- 管理后台（仅管理员可见，点击跳转到 /admin?from=me） -->
+        <a href="/admin?from=me" class="me-item" id="me-admin-item" style="display:none;">
+          <span class="me-icon me-icon-brand">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </span>
+          <span class="me-label">管理后台</span>
+          <span class="me-arrow">›</span>
+        </a>
+        <a href="javascript:void(0)" class="me-item" id="me-logout-item">
+          <span class="me-icon me-icon-pink">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </span>
+          <span class="me-label">退出登录</span>
+          <span class="me-arrow">›</span>
+        </a>
+      </div>
+
+      <div class="me-group">
+        <a href="#" class="me-item" id="me-theme-item">
+          <span class="me-icon me-icon-purple">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          </span>
+          <span class="me-label">深浅模式</span>
+          <span class="me-value" id="me-theme-value">浅色</span>
+        </a>
+        <a href="#" class="me-item" id="me-glass-item">
+          <span class="me-icon me-icon-cyan">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+          </span>
+          <span class="me-label">界面风格</span>
+          <span class="me-value" id="me-glass-value">液态玻璃</span>
+        </a>
+      </div>
+
+      <!-- 联系方式 — 横向网格布局 -->
+      <div class="me-group me-group-contacts" id="me-contacts-group">
+        <div class="me-group-title">联系方式</div>
+        <div class="me-contacts-grid" id="me-contacts-grid"></div>
+      </div>
+    </div>
+  </div>
+
+</BaseLayout>
+
+<style>
+  .about-page { max-width: 720px; margin: 0 auto; }
+  .about-mobile { display: none; }
+  .about-pc .page-header { margin-bottom: 10px; }
+
+  /* ===== PC 端卡片间距 ===== */
+  .about-pc .glass-card { margin-bottom: 8px; padding: 14px 18px; }
+  .about-pc .glass-card:last-child { margin-bottom: 0; }
+
+  /* ===== PC 端作者大卡片 ===== */
+  .about-hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+  }
+  .about-hero-avatar {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .about-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 6px 20px var(--accent-shadow), inset 1px 1px 2px rgba(255,255,255,0.3);
+    border: 2px solid rgba(255,255,255,0.4);
+  }
+  .about-avatar img { width:100%; height:100%; object-fit: cover; }
+  .about-avatar-ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1px solid var(--brand-a20);
+    animation: ring-pulse 3s ease-in-out infinite;
+  }
+  @keyframes ring-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.08); opacity: 0.2; }
+  }
+  .about-hero-info { flex: 1; min-width: 0; }
+  .about-hero-info h2 {
+    margin: 0 0 6px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  .about-hero-info p {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .about-hero-bio {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .about-hero-bio p { margin: 0 0 6px; }
+  .about-hero-bio p:last-child { margin-bottom: 0; }
+  .about-hero-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--brand-a08);
+    color: var(--brand);
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+  .flat .hero-tag { background: var(--bg-secondary); }
+
+  /* ===== 通用卡片标题 ===== */
+  .glass-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 8px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: inset 0.5px 0.5px 1px rgba(255,255,255,0.3);
+  }
+  .card-icon-info {
+    background: linear-gradient(135deg, rgba(0,210,211,0.20), rgba(0,180,216,0.10));
+    color: #00d2d3;
+  }
+  .card-icon-contact {
+    background: linear-gradient(135deg, rgba(79,172,254,0.20), rgba(0,198,251,0.10));
+    color: #4facfe;
+  }
+  .glass-card p { margin: 0 0 5px; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7; }
+  .glass-card p:last-child { margin-bottom: 0; }
+
+  /* 关于我内容区 — 支持 HTML */
+  .about-me-content {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .about-me-content p { margin: 0 0 4px; }
+  .about-me-content p:last-child { margin-bottom: 0; }
+  .about-me-content ul, .about-me-content ol { padding-left: 1.2em; margin: 2px 0; }
+  .about-me-content li { margin-bottom: 1px; }
+  .about-me-content strong { color: var(--text-primary); font-weight: 700; }
+  .about-me-content a { color: var(--brand); text-decoration: underline; }
+  .about-me-content img { max-width: 100%; border-radius: var(--r-md); }
+  .about-me-content h1, .about-me-content h2, .about-me-content h3, .about-me-content h4 {
+    color: var(--text-primary); font-weight: 700; margin: 8px 0 4px;
+  }
+  .about-me-content blockquote {
+    border-left: 3px solid var(--brand);
+    padding: 4px 12px; margin: 6px 0;
+    background: var(--glass-bg-subtle);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  }
+
+  /* ===== PC 端联系卡片 — 容器（链接样式见全局块，因联系方式由 JS 动态生成） ===== */
+  .about-contacts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  /* ===== 移动端"我的"样式 ===== */
+  @media (max-width: 768px) {
+    .about-pc { display: none; }
+    .about-mobile { display: block; width: 100%; }
+
+    .me-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 4px 4px 18px;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+    .me-header:active { opacity: 0.85; }
+    .me-avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .me-avatar {
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      background: var(--accent-gradient);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      box-shadow: 0 6px 24px var(--accent-shadow), inset 1px 1px 2px rgba(255,255,255,0.3);
+      border: 2px solid rgba(255,255,255,0.4);
+      overflow: hidden;
+    }
+    .me-avatar img { width:100%; height:100%; object-fit:cover; }
+    .me-info { flex: 1; min-width: 0; }
+    .me-info h2 { margin: 0 0 4px; font-size: 1.2rem; font-weight: 700; color: var(--text-primary); }
+    .me-info p { margin: 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .me-group {
+      background:
+        radial-gradient(circle 120px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.05), transparent 60%),
+        linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+        var(--lg-bg);
+      border: 1px solid var(--lg-border-subtle);
+      border-radius: 16px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+      -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+      box-shadow:
+        inset 1px 1px 0.5px rgba(255,255,255,0.18),
+        inset -1px -1px 0.5px rgba(255,255,255,0.05),
+        0 2px 8px rgba(0,0,0,0.04);
+      width: 100%;
+      position: relative;
+    }
+    .me-group::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .me-group-title {
+      padding: 10px 16px 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .flat .me-group { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-secondary); border-color: var(--border); box-shadow: none; }
+    .flat .me-group::before { display: none; }
+    .me-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: var(--text-primary);
+      text-decoration: none;
+      transition: background 0.15s;
+      border-bottom: 1px solid var(--lg-border-subtle);
+    }
+    .me-item:last-child { border-bottom: none; }
+    .me-item:active { background: rgba(255,255,255,0.05); }
+    .flat .me-item { border-bottom-color: var(--border); }
+    .flat .me-item:last-child { border-bottom: none; }
+
+    /* 移动端图标 — 彩色玻璃风格 */
+    .me-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all var(--dur-fast);
+    }
+    .me-icon svg { width: 17px; height: 17px; }
+    .me-item:active .me-icon { transform: scale(0.93); }
+    .me-icon-me, .me-icon { background: linear-gradient(135deg, var(--brand-a18), var(--brand-a08)); color: var(--brand); }
+    .me-icon-brand { background: linear-gradient(135deg, var(--brand-a20), var(--brand-a10)); color: var(--brand); }
+    .me-icon-blue { background: linear-gradient(135deg, rgba(79,172,254,0.20), rgba(0,198,251,0.10)); color: #4facfe; }
+    .me-icon-green { background: linear-gradient(135deg, rgba(7,193,96,0.18), rgba(45,198,83,0.08)); color: #07c160; }
+    .me-icon-pink { background: linear-gradient(135deg, rgba(250,112,154,0.20), rgba(245,87,108,0.10)); color: #f06292; }
+    .me-icon-purple { background: linear-gradient(135deg, rgba(156,100,255,0.20), rgba(126,87,255,0.10)); color: #9c64ff; }
+    .me-icon-cyan { background: linear-gradient(135deg, rgba(0,210,211,0.20), rgba(0,180,216,0.10)); color: #00d2d3; }
+    .flat .me-icon { background: var(--brand-a08); color: var(--brand); }
+
+    .me-label {
+      flex: 1;
+      font-size: 0.93rem;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .me-value {
+      font-size: 0.8rem;
+      color: var(--text-tertiary);
+    }
+    .me-arrow {
+      color: var(--text-tertiary);
+      font-size: 1.2rem;
+      font-weight: 300;
+      line-height: 1;
+    }
+
+    /* 移动端联系方式 — 横向 flex 自动均分，占满整行 */
+    .me-contacts-grid {
+      display: flex;
+      flex-wrap: nowrap;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 16px 14px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .me-contacts-grid:empty { display: none; }
+    .me-contacts-grid a,
+    .me-contacts-grid .contact-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 4px;
+      border-radius: 14px;
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      max-width: none;
+      text-decoration: none;
+      color: var(--text-secondary);
+      transition: all var(--dur-fast) var(--ease-fluid);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--lg-border-subtle);
+      box-sizing: border-box;
+    }
+    .me-contacts-grid a:active {
+      transform: scale(0.94);
+      background: rgba(255,255,255,0.08);
+    }
+    .me-contacts-grid .contact-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: inset 0.5px 0.5px 1px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .me-contacts-grid .contact-icon svg { width: 20px; height: 20px; }
+    .me-contacts-grid .contact-label {
+      font-size: 0.65rem;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: center;
+      width: 100%;
+      padding: 0 2px;
+      box-sizing: border-box;
+    }
+    .me-contacts-grid .contact-empty {
+      width: 100%;
+      flex: 1 1 100%;
+      font-size: 0.75rem;
+      color: var(--text-tertiary);
+      background: transparent;
+      border-style: dashed;
+    }
+    /* 玻璃风格品牌色图标 — 见全局样式块 */
+    .flat .me-contacts-grid a { background: var(--bg-secondary); border-color: var(--border); }
+
+    /* 内联登录表单 */
+    .me-login-form {
+      padding: 4px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: me-form-in 0.25s ease;
+    }
+    @keyframes me-form-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .me-login-error {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(239, 68, 68, 0.1);
+      color: #ef4444;
+      font-size: 0.78rem;
+      text-align: center;
+    }
+    .me-login-field input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--lg-border);
+      background: var(--lg-bg);
+      backdrop-filter: blur(var(--lg-blur));
+      -webkit-backdrop-filter: blur(var(--lg-blur));
+      font-size: 0.88rem;
+      color: var(--text-primary);
+      outline: none;
+      transition: border-color 0.2s;
+      box-sizing: border-box;
+    }
+    .me-login-field input:focus {
+      border-color: var(--brand);
+    }
+    .me-login-field input::placeholder {
+      color: var(--text-tertiary);
+    }
+    .me-login-submit {
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: var(--accent-gradient);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    .me-login-submit:active {
+      transform: scale(0.98);
+    }
+    .me-login-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    /* 注册链接 */
+    .me-register-link {
+      display: block;
+      text-align: center;
+      margin-top: var(--sp-2);
+      font-size: 0.8rem;
+      color: var(--brand);
+      text-decoration: none;
+    }
+    .me-register-link:active { opacity: 0.7; }
+    /* 默认头像样式 */
+    .me-avatar-default {
+      background: var(--lg-bg-subtle);
+      color: var(--text-tertiary);
+    }
+  }
+</style>
+
+<!-- 全局样式：联系方式图标及链接（因联系方式由 JS 动态生成，需用 is:global 避免 Astro scoped 失效） -->
+<style is:global>
+  /* ===== PC 端联系链接 — 液态玻璃风格（水平排列） ===== */
+  .about-contacts a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 100%),
+      rgba(255,255,255,0.06);
+    border: 1px solid var(--lg-border-subtle);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--dur-fast) var(--ease-fluid);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    box-shadow: inset 0.5px 0.5px 1px rgba(255,255,255,0.15);
+  }
+  .about-contacts a:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10), inset 0.5px 0.5px 1px rgba(255,255,255,0.25);
+    border-color: var(--lg-highlight);
+  }
+  .dark .about-contacts a {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      rgba(255,255,255,0.03);
+  }
+  .flat .about-contacts a {
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .flat .about-contacts a:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+  /* contact-icon 基础样式 */
+  .about-contacts a .contact-icon,
+  .me-contacts-grid a .contact-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--dur-fast);
+    box-shadow: inset 0.5px 0.5px 1px rgba(255,255,255,0.3), 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .about-contacts a .contact-icon svg,
+  .me-contacts-grid a .contact-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  .about-contacts a .contact-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-primary);
+  }
+  /* 移动端联系方式文字强制居中对齐 */
+  .me-contacts-grid a .contact-label {
+    display: block;
+    width: 100%;
+    font-size: 0.65rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 2px;
+    box-sizing: border-box;
+  }
+
+  /* 使用不透明品牌色，确保浅色/液态玻璃背景下图标清晰可见 */
+  .about-contacts a.c-github .contact-icon,
+  .me-contacts-grid a.c-github .contact-icon {
+    background: #24292e;
+    color: #fff;
+  }
+  .about-contacts a.c-gitee .contact-icon,
+  .me-contacts-grid a.c-gitee .contact-icon {
+    background: #c71d1d;
+    color: #fff;
+  }
+  .about-contacts a.c-email .contact-icon,
+  .me-contacts-grid a.c-email .contact-icon {
+    background: #4facfe;
+    color: #fff;
+  }
+  .about-contacts a.c-wechat .contact-icon,
+  .me-contacts-grid a.c-wechat .contact-icon {
+    background: #07c160;
+    color: #fff;
+  }
+  .about-contacts a.c-qqNumber .contact-icon,
+  .me-contacts-grid a.c-qqNumber .contact-icon {
+    background: #1296db;
+    color: #fff;
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    function escHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    var contactIcons = {
+      github: '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>',
+      gitee: '<path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.99 3.65 9.13 8.44 9.88v-6.99H8v-2.89h2.44V9.85c0-2.41 1.44-3.74 3.63-3.74 1.05 0 2.15.19 2.15.19v2.37h-1.21c-1.19 0-1.56.74-1.56 1.5v1.8H16l-.43 2.89h-2.12V22C18.35 21.13 22 16.99 22 12z"/>',
+      email: '<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+      qqNumber: '<path d="M12 2.5c-3.2 0-5.8 2.5-5.8 5.6 0 1.2.4 2.3 1 3.2-1.4 1.7-2.3 3.9-2.3 6.2 0 2.7 2 4.5 4.6 4.5h5c2.6 0 4.6-1.8 4.6-4.5 0-2.3-.9-4.5-2.3-6.2.6-.9 1-2 1-3.2 0-3.1-2.6-5.6-5.8-5.6z" fill="#fff" stroke="none"/><ellipse cx="12" cy="14" rx="3.2" ry="4.5" fill="#1296db" stroke="none" opacity=".15"/><circle cx="10.2" cy="7" r="1" fill="#fff" stroke="none"/><circle cx="13.8" cy="7" r="1" fill="#fff" stroke="none"/><circle cx="10.4" cy="7.2" r=".42" fill="#1296db" stroke="none"/><circle cx="13.6" cy="7.2" r=".42" fill="#1296db" stroke="none"/><path d="M10.8 8.3L12 9.8l1.2-1.5z" fill="#FFA500" stroke="none"/><path d="M7.8 10.2c1.3.7 2.7 1 4.2 1s2.9-.3 4.2-1c.2.9.3 1.7.3 2.6-1.4.5-2.9.8-4.5.8s-3.1-.3-4.5-.8c0-.9.1-1.7.3-2.6z" fill="#E74C3C" stroke="none" opacity=".75"/><path d="M9.5 17.5c-.3.5-.5 1.2-.5 1.8M14.5 17.5c.3.5.5 1.2.5 1.8" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" opacity=".3"/>',
+      wechat: '<path d="M8.5 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm7 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/><path d="M12 2C6.48 2 2 5.58 2 10c0 2.35 1.3 4.45 3.36 5.92L4.5 19l3.4-1.7c1.24.44 2.62.7 4.1.7 5.52 0 10-3.58 10-8s-4.48-8-10-8z"/>'
+    };
+    var contactLabels = { github:'GitHub', gitee:'Gitee', email:'邮箱', qqNumber:'QQ', wechat:'微信' };
+
+    function setAvatar(el, avatar, name) {
+      if (!el || !avatar) return;
+      el.innerHTML = '<img src="' + avatar + '" alt="' + (name||'') + '" />';
+      var img = el.querySelector('img');
+      img.onerror = function() { el.innerHTML = (name||'A').charAt(0); };
+    }
+
+    function isMobileUA() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
+    function buildContactLink(k, value) {
+      if (!value) return '';
+      if (k === 'email') return 'mailto:' + value;
+      if (k === 'qqNumber') {
+        if (isMobileUA()) return 'mqqwpa://im/chat?chat_type=wpa&uin=' + encodeURIComponent(value);
+        return 'tencent://message/?uin=' + value;
+      }
+      if (k === 'wechat') {
+        // 移动端优先跳转微信 app；桌面端保留原链接（可能是公众号/二维码链接）
+        if (isMobileUA()) return 'weixin://';
+        return value;
+      }
+      return value;
+    }
+
+    // 从配置对象中提取联系方式值，兼容顶层字段与嵌套结构（webSite.contact / contact / setting）
+    function pickContact(cfg, key) {
+      if (!cfg) return '';
+      if (cfg[key]) return cfg[key];
+      // 嵌套结构兼容
+      var sub = cfg.webSite || cfg.contact || cfg.setting || cfg.webConfig || {};
+      return sub[key] || '';
+    }
+
+    function renderContacts(cfg, container, mobile) {
+      if (!container) return;
+      // 联系方式数据源：从 /api/webConfig（cfg）获取，兼容顶层与嵌套结构
+      var contacts = { github:'', gitee:'', email:'', wechat:'', qqNumber:'' };
+      Object.keys(contacts).forEach(function(k) {
+        contacts[k] = pickContact(cfg, k) || '';
+      });
+      var html = '';
+      var order = ['github', 'gitee', 'email', 'wechat', 'qqNumber'];
+      order.forEach(function(k) {
+        var v = contacts[k];
+        if (!v) return;
+        var link = buildContactLink(k, v);
+        var iconSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">' + contactIcons[k] + '</svg>';
+        var extraAttr = (k === 'wechat' && isMobileUA()) ? ' data-wechat-id="' + escHtml(v) + '"' : '';
+        html += '<a href="'+link+'" target="_blank" rel="noopener" class="c-'+k+'"' + extraAttr + '>'
+          + '<span class="contact-icon">' + iconSvg + '</span>'
+          + '<span class="contact-label">' + contactLabels[k] + '</span></a>';
+      });
+      if (html) {
+        container.innerHTML = html;
+        container.style.display = '';
+      } else if (mobile) {
+        container.innerHTML = '<div class="contact-empty">暂无联系方式</div>';
+        container.style.display = '';
+      } else {
+        container.innerHTML = '';
+      }
+    }
+
+    // 移动端点击微信图标时，尝试打开微信并提示微信号
+    if (window.__aboutWechatHandler) {
+      document.removeEventListener('click', window.__aboutWechatHandler);
+    }
+    window.__aboutWechatHandler = function(e) {
+      var link = e.target.closest('a.c-wechat');
+      if (!link) return;
+      var id = link.getAttribute('data-wechat-id');
+      if (!id) return;
+      if (isMobileUA()) {
+        e.preventDefault();
+        // 尝试唤起微信
+        window.location.href = 'weixin://';
+        // 友好提示，方便用户复制微信号
+        setTimeout(function() {
+          if (window.__showToast) {
+            window.__showToast('已尝试打开微信，如未跳转请手动搜索微信号：' + id, 'success');
+          }
+        }, 800);
+      }
+    };
+    document.addEventListener('click', window.__aboutWechatHandler);
+
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      var name = cfg.author || cfg.name || '作者';
+      var avatar = cfg.authorAvatar || '';
+      var bio = cfg.description || cfg.bio || '';
+
+      ['about-author-name'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = name;
+      });
+
+      // authorInfo：支持纯文本和 HTML 格式，替换默认简介
+      ['about-bio'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        var authorInfo = cfg.authorInfo || '';
+        if (authorInfo) {
+          // 检测是否包含 HTML 标签
+          if (/<[a-z][\s\S]*>/i.test(authorInfo)) {
+            el.innerHTML = authorInfo;
+          } else {
+            el.textContent = authorInfo;
+          }
+        } else if (bio) {
+          el.textContent = bio;
+        }
+      });
+
+      // aboutMe：支持 HTML 格式，替换默认关于内容
+      var aboutMeEl = document.getElementById('about-me-content');
+      if (aboutMeEl) {
+        var aboutMe = cfg.aboutMe || '';
+        if (aboutMe) {
+          // 检测是否包含 HTML 标签
+          if (/<[a-z][\s\S]*>/i.test(aboutMe)) {
+            aboutMeEl.innerHTML = aboutMe;
+            // 清理空段落和多余换行
+            aboutMeEl.querySelectorAll('p').forEach(function(p) {
+              if (!p.textContent.trim() && !p.querySelector('img,br,hr')) p.remove();
+            });
+            aboutMeEl.querySelectorAll('br').forEach(function(br) {
+              if (!br.nextSibling || !br.nextSibling.textContent || !br.nextSibling.textContent.trim()) {
+                if (br.parentElement && br.parentElement.tagName === 'P' && !br.parentElement.textContent.trim()) {
+                  br.parentElement.remove();
+                }
+              }
+            });
+          } else {
+            aboutMeEl.innerHTML = aboutMe.split(/\n\n+/).map(function(p) {
+              return '<p>' + escHtml(p).replace(/\n/g, '<br>') + '</p>';
+            }).join('');
+          }
+        } else {
+          aboutMeEl.innerHTML = '<p>暂无介绍</p>';
+        }
+      }
+
+      ['about-avatar'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && avatar) setAvatar(el, avatar, name);
+      });
+      renderContacts(cfg, document.getElementById('about-contacts'), false);
+      renderContacts(cfg, document.getElementById('me-contacts-grid'), true);
+    }
+
+    var themeValue = document.getElementById('me-theme-value');
+    var glassValue = document.getElementById('me-glass-value');
+    function updateLabels() {
+      if (themeValue) themeValue.textContent = document.documentElement.classList.contains('dark') ? '深色' : '浅色';
+      if (glassValue) glassValue.textContent = document.documentElement.classList.contains('flat') ? '平面' : '液态玻璃';
+    }
+    updateLabels();
+    // 主题/风格切换统一由 BaseLayout 事件委托处理，避免重复监听导致二次切换
+
+    // 标签按钮（移动端 我的页面）
+    document.querySelectorAll('.me-tag-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var tag = btn.getAttribute('data-tag');
+        if (tag) window.location.href = '/?tag=' + encodeURIComponent(tag);
+      });
+    });
+
+    // 移动端"我的"页面：检查登录状态
+    function checkMeAuthStatus() {
+      var loggedIn = window.__api && window.__api.isLoggedIn();
+      var user = window.__api ? window.__api.getUser() : null;
+      var guestGroup = document.getElementById('me-guest-group');
+      var userGroup = document.getElementById('me-user-group');
+      var loginForm = document.getElementById('me-login-form');
+      var adminItem = document.getElementById('me-admin-item');
+      var meName = document.getElementById('me-name');
+      var meAvatar = document.getElementById('me-avatar');
+      var meBio = document.getElementById('me-bio');
+
+      if (loggedIn && user) {
+        // 已登录：隐藏游客菜单，显示用户菜单
+        if (guestGroup) guestGroup.style.display = 'none';
+        if (loginForm) loginForm.style.display = 'none';
+        if (userGroup) userGroup.style.display = '';
+        // 更新头部用户信息
+        if (meName) meName.textContent = user.nickname || user.username || '已登录';
+        if (meBio) meBio.textContent = user.email || user.signature || '欢迎回来';
+        if (meAvatar) {
+          meAvatar.classList.remove('me-avatar-default');
+          if (user.avatar) {
+            meAvatar.innerHTML = '<img src="' + user.avatar + '" alt="头像" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" onerror="this.style.display=\'none\'" />';
+          } else {
+            meAvatar.textContent = (user.nickname || user.username || 'U').charAt(0);
+          }
+        }
+        // 检查管理员角色
+        checkMeAdmin(user, adminItem);
+      } else {
+        // 未登录：显示游客菜单，隐藏用户菜单
+        if (guestGroup) guestGroup.style.display = '';
+        if (loginForm) loginForm.style.display = 'none';
+        if (userGroup) userGroup.style.display = 'none';
+        // 头部恢复默认状态
+        if (meName) meName.textContent = '未登录';
+        if (meBio) meBio.textContent = '登录后查看更多功能';
+        if (meAvatar) {
+          meAvatar.classList.add('me-avatar-default');
+          meAvatar.innerHTML = '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+        }
+      }
+    }
+
+    // 检查移动端管理员角色：通过 getProfile 获取 roles（与 PC 端 profile 页一致）
+    function checkMeAdmin(user, adminItem) {
+      if (!adminItem) return;
+      // 先从 localStorage 缓存判断
+      var roles = [];
+      try { roles = JSON.parse(localStorage.getItem('userRoles') || '[]'); } catch(e) {}
+      if (isAdminRole(roles)) { adminItem.style.display = ''; return; }
+      // 缓存没有，调 getProfile 接口获取（与 PC 端 profile 页用同一接口）
+      if (window.__api && typeof window.__api.getProfile === 'function') {
+        window.__api.getProfile().then(function(data) {
+          if (!data) return;
+          var r = data.roles || [];
+          try { localStorage.setItem('userRoles', JSON.stringify(r)); } catch(e) {}
+          if (isAdminRole(r)) adminItem.style.display = '';
+        }).catch(function() {});
+      }
+    }
+    function isAdminRole(roles) {
+      if (!roles || !Array.isArray(roles)) return false;
+      for (var i = 0; i < roles.length; i++) {
+        var r = typeof roles[i] === 'string' ? roles[i] : (roles[i].roleName || roles[i].name || '');
+        if (r.indexOf('超级管理员') >= 0 || r === 'admin' || r === 'ADMIN') return true;
+      }
+      return false;
+    }
+
+    // 移动端内联登录：点击"登录"或"未登录"区域展开/收起表单
+    var meLoginItem = document.getElementById('me-login-item');
+    var meLoginForm = document.getElementById('me-login-form');
+    var meHeader = document.getElementById('me-header');
+    function toggleLoginForm(show) {
+      if (!meLoginForm) return;
+      if (typeof show === 'boolean') {
+        meLoginForm.style.display = show ? 'flex' : 'none';
+      } else {
+        meLoginForm.style.display = meLoginForm.style.display === 'none' ? 'flex' : 'none';
+      }
+    }
+    function closeLoginForm() {
+      if (meLoginForm) meLoginForm.style.display = 'none';
+    }
+    if (meLoginItem) {
+      meLoginItem.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleLoginForm();
+      });
+    }
+    // 点击"未登录"头部也可展开登录表单，提升可发现性
+    if (meHeader) {
+      meHeader.style.cursor = 'pointer';
+      meHeader.style.webkitTapHighlightColor = 'transparent';
+      meHeader.addEventListener('click', function(e) {
+        // 避免点击头像/昵称时与表单内元素冲突
+        if (e.target.closest('#me-login-form')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleLoginForm(true);
+      });
+    }
+    // 点击页面空白处（非登录表单/非登录入口）关闭表单，但不会隐藏登录/注册按钮
+    if (window.__aboutLoginCloseHandler) {
+      document.removeEventListener('click', window.__aboutLoginCloseHandler);
+    }
+    window.__aboutLoginCloseHandler = function(e) {
+      if (!meLoginForm || meLoginForm.style.display === 'none') return;
+      if (e.target.closest('#me-login-form') || e.target.closest('#me-login-item') || e.target.closest('#me-header')) return;
+      closeLoginForm();
+    };
+    document.addEventListener('click', window.__aboutLoginCloseHandler);
+    // 阻止表单内部点击冒泡到 document 关闭处理器
+    if (meLoginForm) {
+      meLoginForm.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
+    // 移动端内联登录提交
+    var meLoginSubmit = document.getElementById('me-login-submit');
+    if (meLoginSubmit) {
+      meLoginSubmit.addEventListener('click', function() {
+        var username = document.getElementById('me-login-username').value.trim();
+        var password = document.getElementById('me-login-password').value.trim();
+        var errorEl = document.getElementById('me-login-error');
+        if (!username || !password) {
+          if (errorEl) { errorEl.textContent = '请输入用户名和密码'; errorEl.style.display = 'block'; }
+          return;
+        }
+        meLoginSubmit.disabled = true;
+        meLoginSubmit.textContent = '登录中...';
+        if (errorEl) errorEl.style.display = 'none';
+        window.__api.login({
+          nickname: '',
+          password: password,
+          source: 'PC',
+          username: username
+        }).then(function(res) {
+          if (res && res.token) {
+            localStorage.setItem('token', res.token);
+            var user = {
+              id: res.id,
+              username: res.username || username,
+              nickname: res.nickname || res.username || username,
+              avatar: res.avatar || res.avatarUrl || ''
+            };
+            localStorage.setItem('user', JSON.stringify(user));
+            document.dispatchEvent(new Event('user:updated'));
+            checkMeAuthStatus();
+          } else {
+            meLoginSubmit.disabled = false;
+            meLoginSubmit.textContent = '登 录';
+            if (errorEl) { errorEl.textContent = '登录失败，请检查用户名和密码'; errorEl.style.display = 'block'; }
+          }
+        }).catch(function(err) {
+          meLoginSubmit.disabled = false;
+          meLoginSubmit.textContent = '登 录';
+          if (errorEl) { errorEl.textContent = (err && err.message) ? err.message : '登录失败，请稍后重试'; errorEl.style.display = 'block'; }
+        });
+      });
+    }
+    // 退出登录
+    var meLogout = document.getElementById('me-logout-item');
+    if (meLogout) {
+      meLogout.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (window.__api) {
+          window.__api.logout().then(function() {
+            window.__api.clearAuth();
+            document.dispatchEvent(new Event('user:updated'));
+            checkMeAuthStatus();
+          }).catch(function() {
+            window.__api.clearAuth();
+            document.dispatchEvent(new Event('user:updated'));
+            checkMeAuthStatus();
+          });
+        }
+      });
+    }
+
+    // 监听用户状态更新
+    document.addEventListener('user:updated', checkMeAuthStatus);
+    // 初始化检查 — 延迟执行确保 DOM 和 API 均就绪
+    setTimeout(function() {
+      if (window.__api) {
+        checkMeAuthStatus();
+      } else {
+        document.addEventListener('DOMContentLoaded', checkMeAuthStatus);
+      }
+    }, 100);
+
+    function loadWebConfig() {
+      if (window.__webConfig) {
+        applyConfig(window.__webConfig);
+        return;
+      }
+      if (window.__api && typeof window.__api.getWebConfig === 'function') {
+        window.__api.getWebConfig().then(function(cfg) {
+          if (cfg) applyConfig(cfg);
+          else {
+            // 接口返回空：显示空态占位，不展示错误数据
+            renderContacts(null, document.getElementById('me-contacts-grid'), true);
+          }
+        }).catch(function() {
+          // 接口失败：显示空态占位，避免手机端联系方式区域空白异常
+          renderContacts(null, document.getElementById('me-contacts-grid'), true);
+        });
+      }
+    }
+    // 联系方式完全由 /api/webConfig 驱动（webConfig 到达后通过 applyConfig 渲染）
+    if (window.__webConfig) applyConfig(window.__webConfig);
+    document.addEventListener('webconfig:updated', function(e) { applyConfig(e.detail); });
+    loadWebConfig();
+    // View Transitions 页面切换后重新应用配置，避免联系方式因 DOM 重载丢失
+    document.addEventListener('astro:page-load', function() {
+      if (window.__webConfig) applyConfig(window.__webConfig);
+    });
+  })();
+</script>

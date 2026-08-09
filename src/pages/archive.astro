@@ -1,0 +1,250 @@
+---
+/**
+ * 归档页 - /archive
+ * - 默认使用 getArchiveByMonth() 分组数据
+ * - 客户端调用 window.__api.getArchive() 动态替换
+ * - 兼容多种返回格式
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getArchiveByMonth, getAllPosts, formatDate } from '../data/posts';
+
+const archive = getArchiveByMonth();
+const totalPosts = getAllPosts().length;
+
+// 按年分组，方便渲染
+const yearMap = new Map<string, { year: string; months: Map<string, { month: string; posts: typeof archive[0]['posts'] }> }>();
+archive.forEach(({ year, month, posts }) => {
+  if (!yearMap.has(year)) {
+    yearMap.set(year, { year, months: new Map() });
+  }
+  yearMap.get(year)!.months.set(month, { month, posts });
+});
+const yearGroups = Array.from(yearMap.values()).sort((a, b) => b.year.localeCompare(a.year));
+---
+
+<BaseLayout title="文章归档" description="按时间浏览所有文章" currentPath="/archive">
+  <div class="content-zone">
+    <div class="page-header">
+      <h1>文章归档</h1>
+      <span class="page-sub" id="archive-count">共 {totalPosts} 篇文章</span>
+    </div>
+
+    <div id="archive-container">
+      {yearGroups.map((yg) => (
+        <div class="glass-panel archive-year-group" data-year={yg.year}>
+          <h2 class="archive-year">{yg.year}</h2>
+          {Array.from(yg.months.values()).sort((a, b) => b.month.localeCompare(a.month)).map((mg) => (
+            <div class="archive-month-block" data-year={yg.year} data-month={mg.month}>
+              <h3 class="archive-month">{parseInt(mg.month)}月</h3>
+              <ul class="archive-list">
+                {mg.posts.map((p) => {
+                  const day = p.date.split('-')[2];
+                  return (
+                    <li>
+                      <time datetime={p.date}>{day}日</time>
+                      <a href={`/article/${p.slug}`} class="archive-link">{p.title}</a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .archive-year-group {
+    margin-bottom: var(--sp-6);
+  }
+  .archive-year-group:last-child { margin-bottom: 0; }
+
+  .archive-month-block {
+    margin-bottom: var(--sp-4);
+  }
+  .archive-month-block:last-child { margin-bottom: 0; }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    function escHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
+    }
+
+    function formatDay(d) {
+      if (!d) return '';
+      var s = String(d).slice(0, 10);
+      var parts = s.split('-');
+      return parts.length === 3 ? parseInt(parts[2], 10) + '日' : s;
+    }
+    function formatMonth(m) {
+      return parseInt(m, 10) + '月';
+    }
+    function getHref(a) {
+      var id = a.id != null ? a.id : (a.slug || a.articleId || '');
+      return '/article/' + encodeURIComponent(id);
+    }
+    function getDate(a) {
+      return a.date || a.publishTime || a.createTime || '';
+    }
+    function getTitle(a) {
+      return a.title || '';
+    }
+
+    /**
+     * 兼容多种归档返回格式：
+     * 1. { "2024": [posts...] } 或 { "2024": { "07": [posts...] } }
+     * 2. [{ year: "2024", months: [{ month: "07", posts: [...] }] }]
+     * 3. [{ year: "2024", month: "07", posts: [...] }]
+     * 4. 文章数组 -> 自动按年月分组
+     */
+    function normalizeArchive(data) {
+      var groups = {}; // year -> month -> posts[]
+      var total = 0;
+
+      if (!data) return { groups: groups, total: 0 };
+
+      if (Array.isArray(data)) {
+        // 检查是否文章数组（元素有 title/date 字段）
+        if (data.length > 0 && (data[0].title || data[0].id) && !data[0].months && !data[0].posts) {
+          // 是文章数组，按年月分组
+          data.forEach(function(a) {
+            var d = getDate(a);
+            if (!d) return;
+            var s = String(d).slice(0, 10);
+            var parts = s.split('-');
+            if (parts.length < 2) return;
+            var y = parts[0], m = parts[1];
+            if (!groups[y]) groups[y] = {};
+            if (!groups[y][m]) groups[y][m] = [];
+            groups[y][m].push(a);
+            total++;
+          });
+        } else {
+          // 格式2 或 3
+          data.forEach(function(item) {
+            if (item.months && Array.isArray(item.months)) {
+              // 格式2
+              var y = String(item.year);
+              if (!groups[y]) groups[y] = {};
+              item.months.forEach(function(mm) {
+                var mStr = String(mm.month).padStart(2, '0');
+                var posts = mm.posts || mm.articles || mm.list || [];
+                if (!groups[y][mStr]) groups[y][mStr] = [];
+                posts.forEach(function(p) { groups[y][mStr].push(p); total++; });
+              });
+            } else if (item.year && item.month) {
+              // 格式3
+              var yy = String(item.year);
+              var mm = String(item.month).padStart(2, '0');
+              if (!groups[yy]) groups[yy] = {};
+              if (!groups[yy][mm]) groups[yy][mm] = [];
+              var posts = item.posts || item.articles || item.list || [];
+              posts.forEach(function(p) { groups[yy][mm].push(p); total++; });
+            } else if (item.year && Array.isArray(item.posts || item.articles || item.list)) {
+              // { year, posts: [...] }
+              var yyy = String(item.year);
+              if (!groups[yyy]) groups[yyy] = {};
+              var arr = item.posts || item.articles || item.list;
+              arr.forEach(function(p) {
+                var d = getDate(p);
+                if (!d) return;
+                var s = String(d).slice(0, 10);
+                var pp = s.split('-');
+                if (pp.length < 2) return;
+                var mStr = pp[1];
+                if (!groups[yyy][mStr]) groups[yyy][mStr] = [];
+                groups[yyy][mStr].push(p);
+                total++;
+              });
+            }
+          });
+        }
+      } else if (typeof data === 'object') {
+        // 格式1
+        Object.keys(data).forEach(function(key) {
+          var val = data[key];
+          if (Array.isArray(val)) {
+            // { "2024": [posts] } -> 需要进一步按月份
+            if (!groups[key]) groups[key] = {};
+            val.forEach(function(p) {
+              var d = getDate(p);
+              if (!d) return;
+              var s = String(d).slice(0, 10);
+              var pp = s.split('-');
+              if (pp.length < 2) return;
+              var mStr = pp[1];
+              if (!groups[key][mStr]) groups[key][mStr] = [];
+              groups[key][mStr].push(p);
+              total++;
+            });
+          } else if (val && typeof val === 'object') {
+            // { "2024": { "07": [posts] } }
+            if (!groups[key]) groups[key] = {};
+            Object.keys(val).forEach(function(mk) {
+              var posts = Array.isArray(val[mk]) ? val[mk] : [];
+              var mStr = String(mk).padStart(2, '0');
+              if (!groups[key][mStr]) groups[key][mStr] = [];
+              posts.forEach(function(p) { groups[key][mStr].push(p); total++; });
+            });
+          }
+        });
+      }
+
+      return { groups: groups, total: total };
+    }
+
+    function renderArchive(data) {
+      var container = document.getElementById('archive-container');
+      var countEl = document.getElementById('archive-count');
+      if (!container) return;
+
+      var result = normalizeArchive(data);
+      var groups = result.groups;
+      var total = result.total;
+      if (countEl && total > 0) countEl.textContent = '共 ' + total + ' 篇文章';
+
+      var years = Object.keys(groups).sort(function(a, b) { return parseInt(b) - parseInt(a); });
+      if (!years.length) return; // 保留默认静态内容
+
+      var html = '';
+      years.forEach(function(y) {
+        html += '<div class="glass-panel archive-year-group" data-year="' + escHtml(y) + '">';
+        html += '<h2 class="archive-year">' + escHtml(y) + '</h2>';
+        var months = Object.keys(groups[y]).sort(function(a, b) { return parseInt(b) - parseInt(a); });
+        months.forEach(function(m) {
+          var posts = groups[y][m];
+          html += '<div class="archive-month-block" data-year="' + escHtml(y) + '" data-month="' + escHtml(m) + '">';
+          html += '<h3 class="archive-month">' + formatMonth(m) + '</h3>';
+          html += '<ul class="archive-list">';
+          posts.forEach(function(p) {
+            var d = getDate(p);
+            html += '<li><time datetime="' + escHtml(String(d).slice(0,10)) + '">' + formatDay(d) + '</time>'
+              + '<a href="' + getHref(p) + '" class="archive-link">' + escHtml(getTitle(p)) + '</a></li>';
+          });
+          html += '</ul></div>';
+        });
+        html += '</div>';
+      });
+      container.innerHTML = html;
+    }
+
+    function load() {
+      if (!window.__api) { setTimeout(load, 50); return; }
+      window.__api.getArchive().then(function(data) {
+        if (data) renderArchive(data);
+      }).catch(function() { /* 保留默认静态内容 */ });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  })();
+</script>

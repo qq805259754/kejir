@@ -1,0 +1,233 @@
+﻿---
+/**
+ * 管理后台 - 分类管理 - /admin/article-category
+ * 分类列表、搜索、新增/编辑（弹窗）、批量删除
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="分类管理" description="分类管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>分类管理</h1>
+      <p class="page-sub">管理文章分类，支持新增、编辑、排序和批量删除</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label>名称</label>
+        <input type="text" class="glass-input" id="search-name" placeholder="输入分类名称" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增分类
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+    var selectedIds = [];
+    var lastList = [];
+
+    // ===== 保存分类（新增/编辑统一入口） =====
+    function saveCategory(data) {
+      if (data.id) {
+        return Admin.api.put('/sys/category', data);
+      }
+      return Admin.api.post('/sys/category', data);
+    }
+
+    // ===== 打开弹窗 =====
+    function openCategoryModal(row) {
+      var isEdit = !!row;
+      var body =
+        '<form id="edit-form">' +
+          '<div class="admin-form-group">' +
+            '<label>名称 <span class="req">*</span></label>' +
+            '<input type="text" class="glass-input" name="name" required placeholder="请输入分类名称" />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>排序 <span class="req">*</span></label>' +
+            '<input type="number" class="glass-input" name="sort" data-type="number" min="1" required placeholder="最小为1" value="1" />' +
+            '<div class="admin-form-hint">数字越小排序越靠前</div>' +
+          '</div>' +
+        '</form>';
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>';
+
+      Admin.openModal({
+        title: isEdit ? '编辑分类' : '新增分类',
+        body: body,
+        footer: footer,
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          if (isEdit) {
+            Admin.fillForm(form, row);
+          }
+          modal.querySelector('#btn-save').addEventListener('click', function () {
+            if (!form.checkValidity()) {
+              form.reportValidity();
+              return;
+            }
+            var data = Admin.serializeForm(form);
+            if (isEdit) data.id = row.id;
+            saveCategory(data).then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              crud.refresh();
+            }).catch(function (err) {
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // ===== 列配置 =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'name', title: '名称',
+        render: function (row) {
+          return '<span style="font-weight:600;">' + Admin.esc(row.name) + '</span>';
+        }
+      },
+      { key: 'sort', title: '排序', width: '100px', align: 'center' },
+      {
+        key: 'createTime', title: '创建时间', width: '160px',
+        render: function (row) { return Admin.formatDate(row.createTime, true); }
+      },
+      {
+        key: 'actions', title: '操作', width: '120px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('修改', 'act-edit', null, row.id) +
+            Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== CRUD 列表工厂 =====
+    var crud = Admin.createCrudList({
+      container: tableContainer,
+      paginationEl: paginationContainer,
+      columns: columns,
+      listApi: function (params) {
+        return Admin.api.get('/sys/category/list', params).then(function (data) {
+          lastList = Admin.getPageRecords(data).list;
+          return data;
+        });
+      },
+      deleteApi: function (id) { return Admin.api.del('/sys/category/delete/' + id); },
+      deleteLabel: function (row) { return row.name || ('ID:' + row.id); },
+      emptyText: '暂无分类数据',
+      onSelectionChange: function (ids) { selectedIds = ids; },
+    });
+
+    // ===== 搜索 =====
+    function getSearchParams() {
+      return {
+        name: document.getElementById('search-name').value.trim(),
+      };
+    }
+    function doSearch() { crud.search(getSearchParams()); }
+    function doReset() {
+      document.getElementById('search-name').value = '';
+      crud.search({});
+    }
+
+    // ===== 根据 ID 查找行数据 =====
+    function findRowById(id) {
+      for (var i = 0; i < lastList.length; i++) {
+        if (String(lastList[i].id) === String(id)) return lastList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-add').addEventListener('click', function () {
+      openCategoryModal(null);
+    });
+    document.getElementById('btn-batch-del').addEventListener('click', function () {
+      crud.batchDelete(selectedIds);
+    });
+
+    // 表格操作事件委托（修改/删除）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-edit')) {
+        var row = findRowById(id);
+        if (row) openCategoryModal(row);
+      } else if (btn.classList.contains('act-del')) {
+        var delRow = findRowById(id);
+        var label = delRow ? delRow.name : '该分类';
+        Admin.confirm('确定要删除「' + label + '」吗？', function () {
+          Admin.api.del('/sys/category/delete/' + id).then(function () {
+            Admin.toast('删除成功', 'success');
+            crud.refresh();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+    });
+
+    // 回车搜索
+    document.getElementById('search-name').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // ===== 初始化 =====
+    crud.load();
+    }
+  })();
+</script>

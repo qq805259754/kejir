@@ -1,0 +1,48 @@
+# ==========================================================================
+# 科技热 - Docker Compose 生产配置
+# SSR + Nginx 全部容器化，国内镜像源 + CentOS 7 SELinux 兼容
+# ==========================================================================
+
+services:
+  # Node.js SSR 渲染服务
+  # 同时接入 selfnet（访问后端 API）和 kejir-net（被 nginx 反代）
+  ssr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kejir-ssr
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=4321
+      - API_BASE=http://blog:8080/kj
+    networks:
+      - kejir-net
+      - selfnet
+
+  # Nginx 反向代理 + 静态资源
+  # privileged: true 彻底绕过 CentOS 7 SELinux 对容器内文件写入的拦截
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: kejir-nginx
+    privileged: true
+    ports:
+      - "80:80"
+      - "443:443"
+    tmpfs:
+      - /run
+      - /tmp
+    depends_on:
+      - ssr
+    restart: unless-stopped
+    networks:
+      - kejir-net
+
+networks:
+  kejir-net:
+    driver: bridge
+  selfnet:
+    external: true

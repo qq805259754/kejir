@@ -1,0 +1,111 @@
+---
+import { siteConfig } from '../data/site';
+const year = new Date().getFullYear();
+// 备案号：服务端直接注入默认值（环境变量 PUBLIC_SITE_ICP），webConfig 返回时再覆盖，
+// 保证三端（PC/平板/手机）都能稳定展示备案号，不因接口时序或缺失而丢失。
+const icp = siteConfig.icp || '';
+---
+
+<footer class="app-footer">
+  <div class="footer-inner">
+    <p class="footer-copy">
+      &copy; {year} <span id="footer-site-name">{siteConfig.title}</span> · Powered by 科技热
+    </p>
+    <p class="footer-meta">
+      <span id="footer-icp">{icp ? '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" class="ghost-link">' + icp + '</a>' : ''}</span>
+    </p>
+  </div>
+</footer>
+
+<style>
+  .app-footer {
+    grid-area: footer;
+    padding: 10px 24px;
+    border-top: 1px solid var(--lg-border-subtle, rgba(255,255,255,0.12));
+    /* 与页面整体背景统一：玻璃风格沿用玻璃底色 + 柔和渐变，避免底部色块突兀 */
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08)),
+      var(--lg-bg, rgba(255,255,255,0.35));
+    backdrop-filter: blur(var(--lg-blur, 16px)) saturate(var(--lg-saturate, 140%));
+    -webkit-backdrop-filter: blur(var(--lg-blur, 16px)) saturate(var(--lg-saturate, 140%));
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    transition: border-color var(--dur-normal), color var(--dur-normal), background-color 0.3s ease;
+    z-index: 2;
+    flex-shrink: 0;
+  }
+
+  .flat .app-footer {
+    background: var(--bg-primary);
+    border-top: 1px solid var(--border);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .dark .app-footer {
+    color: var(--text-secondary);
+    border-top-color: rgba(255,255,255,0.06);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.03)),
+      var(--lg-bg, rgba(20,20,28,0.40));
+  }
+  .dark.flat .app-footer {
+    background: var(--bg-primary);
+    border-top-color: var(--border);
+  }
+
+  .footer-inner { max-width: 900px; margin: 0 auto; }
+  .footer-copy { margin: 0 0 2px; }
+  .footer-meta { margin: 0; }
+  .footer-sep { margin: 0 6px; }
+
+  .ghost-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--dur-fast);
+  }
+  .ghost-link:hover { color: var(--brand); }
+  .dark .ghost-link { color: var(--text-secondary); }
+  .dark .ghost-link:hover { color: var(--brand); }
+
+  @media (max-width: 768px) {
+    /* 手机端：声明与备案直接使用整个页面的背景，不叠加单独的玻璃/色块背景。
+       !important 确保覆盖 .dark .app-footer / .flat .app-footer 等更高权重的背景规则，
+       使底部内容与页面融为一体。 */
+    .app-footer,
+    .dark .app-footer,
+    .flat .app-footer,
+    .dark.flat .app-footer {
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border-top: none !important;
+      padding: 12px 16px;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom));
+      font-size: 0.68rem;
+    }
+  }
+</style>
+
+<script is:inline data-astro-rerun>
+  (function() {
+    // data-astro-rerun：每次页面加载及 View Transitions 导航时执行，
+    // 重新应用站点名与备案号，保证底部信息不因跳转/返回而丢失。
+    function applyConfig(cfg) {
+      if (!cfg) return;
+      var n = document.getElementById('footer-site-name');
+      var icp = document.getElementById('footer-icp');
+      if (n && cfg.name) n.textContent = cfg.name;
+      if (icp) {
+        // webConfig 返回备案号则覆盖；为空时回退到服务端注入的默认 icp（保留显示）
+        var v = (cfg.recordNum || cfg.icp || '').trim();
+        if (v) {
+          icp.innerHTML = '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" class="ghost-link">' + v + '</a>';
+        }
+      }
+    }
+    if (window.__webConfig) applyConfig(window.__webConfig);
+    document.addEventListener('webconfig:updated', function(e) { applyConfig(e.detail); });
+  })();
+</script>

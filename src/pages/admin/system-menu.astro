@@ -1,0 +1,702 @@
+---
+/**
+ * 系统管理 - 菜单管理 - /admin/system-menu
+ * 树形结构展示，递归渲染子菜单带缩进，不分页
+ * 含可视化图标选择器
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="菜单管理" description="菜单管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>菜单管理</h1>
+      <p class="page-sub">管理系统菜单树结构，支持目录、菜单、按钮三种类型</p>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <div class="menu-search-wrap">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="menu-search" class="glass-input menu-search-input" placeholder="搜索菜单名称" autocomplete="off" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增顶级菜单
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var searchInput = document.getElementById('menu-search');
+    var treeData = [];
+    var flatList = [];
+    var expandedIds = {};
+    var searchKeyword = '';
+
+    // 类型映射
+    var typeMap = { 'CATALOG': '目录', 'MENU': '菜单', 'BUTTON': '按钮' };
+    var typeBadgeMap = { 'CATALOG': 'info', 'MENU': 'success', 'BUTTON': 'warning' };
+
+    // ===== 图标名称 + SVG path 映射 =====
+    var iconPathMap = {
+      'Document': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+      'PriceTag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+      'Dessert': '<path d="M12 2a8 8 0 0 0-8 8c0 4 3 6 3 10h10c0-4 3-6 3-10a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/>',
+      'ChatDotRound': '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><circle cx="12" cy="12" r="1"/>',
+      'Setting': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'User': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      'Menu': '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+      'Histogram': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+      'Link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+      'Message': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      'Edit': '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+      'Delete': '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+      'View': '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+      'Folder': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+      'Operation': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      'Picture': '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+      'Bell': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+      'Tree': '<path d="M12 2l3 6h-2v4h4v-2l6 3-6 3v-2h-4v4h2l-3 6-3-6h2v-4H7v2l-6-3 6-3v-2h4V8h-2z"/>',
+      'Files': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+      'Monitor': '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+      'Tools': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+      'Cpu': '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+      'Clock': '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      'Connection': '<path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+      'Code': '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+      'List': '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+      'HomeFilled': '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+      'House': '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+      'Odometer': '<circle cx="12" cy="13" r="8"/><line x1="12" y1="13" x2="15" y2="9"/><line x1="9" y1="2" x2="15" y2="2"/>',
+      'Grid': '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+      'Calendar': '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+      'Search': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+      'EditPen': '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+      'Notebook': '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="8" y1="3" x2="8" y2="21"/>',
+      'Reading': '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+      'Tag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+      'FolderOpened': '<path d="M6 14l1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>',
+      'FolderAdd': '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
+      'ChatSquare': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+      'ChatLineRound': '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>',
+      'Notification': '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+      'UserFilled': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      'Lock': '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+      'Key': '<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
+      'Shield': '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+      'DataAnalysis': '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
+      'DataBoard': '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>',
+      'DataLine': '<path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/>',
+      'TrendCharts': '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+      'PieChart': '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+      'Star': '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+      'Flag': '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
+      'Bookmark': '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+      'Filter': '<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>',
+      'Sort': '<path d="M3 6h13M3 12h9M3 18h5M17 8l4-4 4 4M21 4v16"/>',
+      'Download': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+      'Upload': '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+      'CopyDocument': '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+      'DocumentAdd': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/>',
+      'DocumentChecked': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/>',
+      'Share': '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+      'FullScreen': '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>',
+      'Lightning': '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+      'MagicStick': '<path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"/>',
+      'InfoFilled': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+      'WarningFilled': '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      'SuccessFilled': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+      'CircleCheck': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+      'QuestionFilled': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      'ThumbUp': '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>',
+      'Promotion': '<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+      'Phone': '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+      'Wallet': '<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
+      'Coin': '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
+      'Location': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+      'Trophy': '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>',
+      'Timer': '<circle cx="12" cy="13" r="8"/><line x1="12" y1="13" x2="15" y2="9"/><line x1="9" y1="2" x2="15" y2="2"/>',
+      'SwitchButton': '<rect x="1" y="9" width="22" height="6" rx="3"/><circle cx="7" cy="12" r="2"/>',
+      'Plus': '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+      'Minus': '<line x1="5" y1="12" x2="19" y2="12"/>',
+      'Check': '<polyline points="20 6 9 17 4 12"/>',
+      'Close': '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+      'Magnet': '<path d="M6 15a6 6 0 1 0 12 0V3h-6v12a3 3 0 0 1-6 0V3H0v12"/><path d="M6 3v6M18 3v6"/>',
+      'Brush': '<path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/>',
+      'Rank': '<polygon points="12 2 15 8 9 8"/><polyline points="9 16 15 16 12 22"/><line x1="12" y1="9" x2="12" y2="15"/>',
+      'Open': '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+      'TurnOff': '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/>',
+      'Stamp': '<path d="M5 22h14M12 2v6M9 8h6"/><path d="M9 8a3 3 0 0 0-3 3v6h12v-6a3 3 0 0 0-3-3"/>',
+      'Paperclip': '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+      'Memo': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+      'Service': '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>',
+      'Headset': '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-3v-7h3a2 2 0 0 1 2 2zM3 19a2 2 0 0 0 2 2h3v-7H5a2 2 0 0 0-2 2z"/>',
+      'Shop': '<path d="M2 7l1-4h18l1 4M3 7h18v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zM9 22V12h6v10"/>',
+      'Present': '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+      'Medal': '<circle cx="12" cy="9" r="6"/><polyline points="8.5 13.5 7 22 12 19 17 22 15.5 13.5"/>',
+      'Coffee': '<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/>',
+      'Platform': '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
+      'Discount': '<line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+      'Help': '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      'Hide': '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
+      'Select': '<polyline points="20 6 9 17 4 12"/>',
+      'Failed': '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+      'Remove': '<circle cx="12" cy="12" r="10"/><line x1="9" y1="12" x2="15" y2="12"/>',
+      'ZoomIn': '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>',
+      'Aim': '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+      'Guide': '<polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/><polyline points="2 15.5 12 8.5 22 15.5"/>',
+      'Compasses': '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
+      'MapLocation': '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+      'Expand': '<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>',
+      'Postcard': '<rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/><line x1="8" y1="17" x2="12" y2="17"/>',
+      'Avatar': '<circle cx="12" cy="8" r="5"/><path d="M3 21v-2a7 7 0 0 1 7-7h4a7 7 0 0 1 7 7v2"/>',
+      'MessageBox': '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M8 9h8M8 13h5M8 17h7"/>',
+      'Setup': '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    };
+
+    // 图标分类列表（用于图标选择器）
+    var iconCategories = [
+      { name: '导航', icons: ['House', 'HomeFilled', 'Menu', 'Grid', 'Guide', 'Compasses', 'MapLocation', 'Location', 'Aim', 'FullScreen', 'Open', 'Expand'] },
+      { name: '内容', icons: ['Document', 'Files', 'Notebook', 'Memo', 'Postcard', 'Reading', 'DocumentAdd', 'DocumentChecked', 'CopyDocument', 'Stamp', 'Paperclip'] },
+      { name: '数据', icons: ['DataAnalysis', 'DataBoard', 'DataLine', 'TrendCharts', 'PieChart', 'Histogram', 'Odometer', 'Rank', 'Sort', 'Filter'] },
+      { name: '用户', icons: ['User', 'UserFilled', 'Avatar', 'Lock', 'Key', 'Shield', 'SwitchButton', 'TurnOff', 'Medal', 'Trophy'] },
+      { name: '通信', icons: ['ChatDotRound', 'ChatSquare', 'ChatLineRound', 'Message', 'MessageBox', 'Notification', 'Bell', 'Edit', 'EditPen', 'Link', 'Share'] },
+      { name: '设置', icons: ['Setting', 'Setup', 'Tools', 'Operation', 'Cpu', 'Platform', 'Monitor', 'Service', 'MagicStick', 'Brush', 'Magnet'] },
+      { name: '常用', icons: ['Folder', 'FolderOpened', 'FolderAdd', 'Search', 'Calendar', 'Clock', 'Timer', 'Tag', 'PriceTag', 'Bookmark', 'Flag'] },
+      { name: '状态', icons: ['SuccessFilled', 'InfoFilled', 'WarningFilled', 'QuestionFilled', 'CircleCheck', 'Failed', 'Select', 'Check', 'Close', 'Remove', 'Hide'] },
+      { name: '其他', icons: ['Star', 'ThumbUp', 'Lightning', 'Download', 'Upload', 'List', 'Code', 'Connection', 'Tree', 'Picture', 'Promotion', 'Discount', 'Shop', 'Present', 'Phone', 'Wallet', 'Coin', 'Coffee', 'Headset', 'Help'] },
+    ];
+
+    function makeIconSvg(iconName) {
+      var path = iconPathMap[iconName];
+      if (!path) return '';
+      return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + path + '</svg>';
+    }
+
+    function getIconSvg(name) {
+      if (!name) return '';
+      var n = name.charAt(0).toUpperCase() + name.slice(1);
+      return makeIconSvg(n) || makeIconSvg(name);
+    }
+
+    // ===== 递归扁平化树 =====
+    function flattenTree(nodes, level, parentId, result) {
+      if (!nodes) return result;
+      nodes.forEach(function (node) {
+        var item = Object.assign({}, node);
+        item._level = level;
+        item._parentId = parentId;
+        result.push(item);
+        if (node.children && node.children.length > 0) {
+          flattenTree(node.children, level + 1, node.id, result);
+        }
+      });
+      return result;
+    }
+
+    function isRowVisible(item) {
+      var pid = item._parentId;
+      while (pid !== undefined && pid !== null && pid !== 0) {
+        if (!expandedIds[String(pid)]) return false;
+        pid = findParentId(pid);
+      }
+      return true;
+    }
+    function findParentId(id) {
+      for (var i = 0; i < flatList.length; i++) {
+        if (String(flatList[i].id) === String(id)) return flatList[i]._parentId;
+      }
+      return null;
+    }
+    function hasChildren(node) {
+      return node.children && node.children.length > 0;
+    }
+
+    // ===== 构建上级菜单下拉选项 =====
+    function buildParentOptions(selectedId) {
+      var html = '<option value="">顶级菜单</option>';
+      flatList.forEach(function (item) {
+        if (item.type === 'BUTTON') return;
+        var indent = '';
+        for (var i = 0; i < item._level; i++) indent += '\u3000';
+        var selected = (selectedId !== undefined && String(item.id) === String(selectedId)) ? ' selected' : '';
+        html += '<option value="' + Admin.esc(item.id) + '"' + selected + '>' + indent + Admin.esc(item.title) + '</option>';
+      });
+      return html;
+    }
+
+    // ===== 渲染树形表格 =====
+    function renderTreeTable() {
+      var keyword = searchKeyword.trim().toLowerCase();
+      var visibleRows;
+      if (keyword) {
+        visibleRows = flatList.filter(function (item) {
+          return (item.title || '').toLowerCase().indexOf(keyword) >= 0;
+        });
+        if (visibleRows.length === 0) {
+          tableContainer.innerHTML = '<div class="admin-empty"><p>未找到匹配「' + Admin.esc(searchKeyword.trim()) + '」的菜单</p></div>';
+          return;
+        }
+      } else {
+        visibleRows = flatList.filter(isRowVisible);
+        if (visibleRows.length === 0) {
+          tableContainer.innerHTML = '<div class="admin-empty"><p>暂无菜单数据</p></div>';
+          return;
+        }
+      }
+      var html = '<div class="admin-table-wrap"><div class="admin-table-scroll"><table class="admin-table"><thead><tr>';
+      html += '<th>菜单名称</th><th style="width:60px;text-align:center;">图标</th><th>路由地址</th><th>组件路径</th><th style="width:70px;text-align:center;">类型</th><th style="width:60px;text-align:center;">排序</th><th style="width:80px;text-align:center;">状态</th><th style="width:200px;text-align:center;">操作</th>';
+      html += '</tr></thead><tbody>';
+      visibleRows.forEach(function (row) {
+        var indent = '';
+        for (var i = 0; i < row._level; i++) {
+          indent += '<span style="display:inline-block;width:24px;"></span>';
+        }
+        var expanded = !!expandedIds[String(row.id)];
+        var canExpand = hasChildren(row);
+        var toggleHtml = (canExpand && !keyword)
+          ? '<span class="menu-tree-toggle' + (expanded ? ' expanded' : '') + '" data-toggle="' + Admin.esc(row.id) + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>'
+          : '<span class="menu-tree-toggle leaf"></span>';
+        html += '<tr data-id="' + Admin.esc(row.id) + '">';
+        html += '<td>' + indent + toggleHtml + '<span style="font-weight:600;">' + Admin.esc(row.title) + '</span></td>';
+        html += '<td style="text-align:center;"><span class="menu-icon-cell">' + (getIconSvg(row.icon) || '<span style="color:var(--text-tertiary);">-</span>') + '</span></td>';
+        html += '<td><code style="font-size:0.8rem;color:var(--text-secondary);">' + Admin.esc(row.path || '-') + '</code></td>';
+        html += '<td><code style="font-size:0.8rem;color:var(--text-tertiary);">' + Admin.esc(row.component || '-') + '</code></td>';
+        html += '<td style="text-align:center;">' + Admin.badge(typeMap[row.type] || '未知', typeBadgeMap[row.type] || 'default') + '</td>';
+        html += '<td style="text-align:center;">' + Admin.esc(row.sort != null ? row.sort : '-') + '</td>';
+        html += '<td style="text-align:center;">' + (row.hidden == 0 ? Admin.badge('显示', 'success') : Admin.badge('隐藏', 'danger')) + '</td>';
+        html += '<td class="col-actions" style="text-align:center;">';
+        if (row.type !== 'BUTTON') {
+          html += Admin.actBtn('新增', 'act-success', null, row.id);
+        }
+        html += Admin.actBtn('修改', 'act-edit', null, row.id);
+        html += Admin.actBtn('删除', 'act-del', null, row.id);
+        html += '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+      tableContainer.innerHTML = html;
+
+      tableContainer.querySelectorAll('[data-toggle]').forEach(function (toggle) {
+        toggle.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var id = toggle.getAttribute('data-toggle');
+          if (expandedIds[String(id)]) {
+            delete expandedIds[String(id)];
+          } else {
+            expandedIds[String(id)] = true;
+          }
+          renderTreeTable();
+        });
+      });
+    }
+
+    // ===== 加载菜单树 =====
+    function loadTree() {
+      Admin.showLoading(tableContainer);
+      Admin.api.get('/sys/menu/tree').then(function (data) {
+        treeData = Array.isArray(data) ? data : (data && data.records) || (data && data.list) || [];
+        flatList = flattenTree(treeData, 0, null, []);
+        renderTreeTable();
+      }).catch(function (err) {
+        Admin.showError(tableContainer, err.message);
+      });
+    }
+
+    // ===== 图标选择器 =====
+    function buildIconPicker(selectedIcon) {
+      var html = '<div class="icon-picker">';
+      html += '<div class="icon-picker-search">';
+      html += '<input type="text" class="glass-input icon-picker-search-input" placeholder="搜索图标..." />';
+      html += '</div>';
+      html += '<div class="icon-picker-grid">';
+      iconCategories.forEach(function (cat) {
+        html += '<div class="icon-picker-cat">';
+        html += '<div class="icon-picker-cat-name">' + Admin.esc(cat.name) + '</div>';
+        html += '<div class="icon-picker-cat-icons">';
+        cat.icons.forEach(function (iconName) {
+          var isSelected = (selectedIcon && selectedIcon === iconName) ? ' selected' : '';
+          html += '<div class="icon-picker-item' + isSelected + '" data-icon="' + Admin.esc(iconName) + '" title="' + Admin.esc(iconName) + '">';
+          html += makeIconSvg(iconName);
+          html += '<span class="icon-picker-item-label">' + Admin.esc(iconName) + '</span>';
+          html += '</div>';
+        });
+        html += '</div></div>';
+      });
+      html += '</div></div>';
+      return html;
+    }
+
+    // ===== 新增/编辑弹窗 =====
+    function openMenuModal(row, parentId) {
+      var isEdit = !!row;
+      var currentIcon = isEdit ? (row.icon || '') : '';
+
+      var body =
+        '<form id="edit-form">' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>上级菜单</label>' +
+              '<select class="glass-input" name="parentId" data-type="number" id="parent-select"></select>' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>菜单类型 <span class="req">*</span></label>' +
+              '<select class="glass-input" name="type">' +
+                '<option value="CATALOG">目录</option>' +
+                '<option value="MENU">菜单</option>' +
+                '<option value="BUTTON">按钮</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>菜单名称 <span class="req">*</span></label>' +
+            '<input type="text" class="glass-input" name="title" placeholder="请输入菜单名称" required />' +
+          '</div>' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>路由路径</label>' +
+              '<input type="text" class="glass-input" name="path" placeholder="如 /admin/user" />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>组件路径</label>' +
+              '<input type="text" class="glass-input" name="component" placeholder="如 admin/user/index" />' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>图标</label>' +
+            '<div id="icon-picker-container">' +
+              buildIconPicker(currentIcon) +
+            '</div>' +
+            '<input type="hidden" name="icon" id="icon-hidden" value="' + Admin.esc(currentIcon) + '" />' +
+          '</div>' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>排序</label>' +
+              '<input type="number" class="glass-input" name="sort" data-type="number" placeholder="数字越小越靠前" value="0" />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>是否显示</label>' +
+              '<select class="glass-input" name="hidden" data-type="number">' +
+                '<option value="0">显示</option>' +
+                '<option value="1">隐藏</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</form>';
+
+      var footer =
+        '<button class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+        '<button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>';
+
+      Admin.openModal({
+        title: isEdit ? '编辑菜单' : '新增菜单',
+        body: body,
+        footer: footer,
+        width: '700px',
+        onOpen: function (modal) {
+          var form = modal.querySelector('#edit-form');
+          var parentSelect = modal.querySelector('#parent-select');
+          var iconHidden = modal.querySelector('#icon-hidden');
+
+          // 填充上级菜单选项
+          var pid = isEdit ? row.parentId : (parentId !== undefined ? parentId : '');
+          parentSelect.innerHTML = buildParentOptions(pid);
+
+          if (isEdit) {
+            Admin.fillForm(form, row);
+            iconHidden.value = row.icon || '';
+          }
+
+          // 图标选择器事件
+          var pickerContainer = modal.querySelector('#icon-picker-container');
+          var iconItems = pickerContainer.querySelectorAll('.icon-picker-item');
+          iconItems.forEach(function (item) {
+            item.addEventListener('click', function () {
+              iconItems.forEach(function (i) { i.classList.remove('selected'); });
+              item.classList.add('selected');
+              var iconName = item.getAttribute('data-icon');
+              iconHidden.value = iconName;
+            });
+          });
+
+          // 图标搜索
+          var searchInput = pickerContainer.querySelector('.icon-picker-search-input');
+          if (searchInput) {
+            searchInput.addEventListener('input', function () {
+              var kw = searchInput.value.trim().toLowerCase();
+              iconItems.forEach(function (item) {
+                var name = (item.getAttribute('data-icon') || '').toLowerCase();
+                item.style.display = kw === '' || name.indexOf(kw) >= 0 ? '' : 'none';
+              });
+            });
+          }
+
+          modal.querySelector('#btn-save').addEventListener('click', function () {
+            var data = Admin.serializeForm(form);
+            data.icon = iconHidden.value;
+            if (!data.title) { Admin.toast('请输入菜单名称', 'error'); return; }
+
+            var promise;
+            if (isEdit) {
+              data.id = row.id;
+              promise = Admin.api.put('/sys/menu/', data);
+            } else {
+              promise = Admin.api.post('/sys/menu', data);
+            }
+            promise.then(function () {
+              Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+              Admin.closeModal();
+              loadTree();
+            }).catch(function (err) {
+              Admin.toast(err.message || '保存失败', 'error');
+            });
+          });
+        },
+      });
+    }
+
+    // ===== 删除 =====
+    function handleDelete(id) {
+      Admin.confirm('确定要删除该菜单吗？子菜单也将一并删除。', function () {
+        Admin.api.del('/sys/menu/' + id).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadTree();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    }
+
+    // ===== 根据 ID 查找节点 =====
+    function findNodeById(id) {
+      for (var i = 0; i < flatList.length; i++) {
+        if (String(flatList[i].id) === String(id)) return flatList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-add').addEventListener('click', function () {
+      openMenuModal(null);
+    });
+    document.getElementById('btn-refresh').addEventListener('click', loadTree);
+
+    var searchTimer = null;
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(function () {
+          searchKeyword = searchInput.value;
+          renderTreeTable();
+        }, 200);
+      });
+    }
+
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-del')) {
+        handleDelete(id);
+      } else if (btn.classList.contains('act-success')) {
+        openMenuModal(null, id);
+      } else if (btn.classList.contains('act-edit')) {
+        var node = findNodeById(id);
+        if (node) openMenuModal(node);
+      }
+    });
+
+    // ===== 初始化 =====
+    loadTree();
+    }
+  })();
+</script>
+
+<style is:global>
+  /* 菜单搜索框 */
+  .menu-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    max-width: 280px;
+    min-width: 0;
+  }
+  .menu-search-wrap > svg {
+    position: absolute;
+    left: 10px;
+    color: var(--text-tertiary);
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+  .menu-search-input {
+    width: 100%;
+    padding: 7px 12px 7px 34px;
+    font-size: 0.84rem;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--lg-border);
+    background: var(--lg-bg-subtle);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+  .menu-search-input:focus {
+    outline: none;
+    border-color: var(--brand);
+    background: var(--lg-bg);
+    box-shadow: 0 0 0 3px var(--brand-a15);
+  }
+  .flat .menu-search-input {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  /* 图标选择器 */
+  .icon-picker {
+    border: 1px solid var(--lg-border-subtle, var(--border));
+    border-radius: var(--r-md);
+    background: var(--lg-bg-subtle, rgba(120,120,120,0.03));
+    overflow: hidden;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+  }
+  .flat .icon-picker {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .icon-picker-search {
+    padding: 8px;
+    border-bottom: 1px solid var(--lg-border-subtle, var(--border));
+    flex-shrink: 0;
+  }
+  .icon-picker-search-input {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 0.82rem;
+    box-sizing: border-box;
+  }
+  .icon-picker-grid {
+    overflow-y: auto;
+    padding: 10px;
+    flex: 1;
+  }
+  .icon-picker-cat {
+    margin-bottom: 10px;
+  }
+  .icon-picker-cat:last-child { margin-bottom: 0; }
+  .icon-picker-cat-name {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+    padding-left: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .icon-picker-cat-icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .icon-picker-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 4px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 64px;
+    color: var(--text-secondary);
+    background: var(--lg-bg, rgba(255,255,255,0.3));
+  }
+  .icon-picker-item:hover {
+    border-color: var(--brand-a35);
+    background: var(--brand-a08);
+    color: var(--brand);
+    transform: translateY(-1px);
+  }
+  .icon-picker-item.selected {
+    border-color: var(--brand);
+    background: var(--brand-a15);
+    color: var(--brand);
+    box-shadow: 0 0 0 2px var(--brand-a10);
+  }
+  .icon-picker-item svg {
+    flex-shrink: 0;
+  }
+  .icon-picker-item-label {
+    font-size: 0.62rem;
+    text-align: center;
+    line-height: 1.2;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .flat .icon-picker-item {
+    background: var(--surface);
+    border-radius: 6px;
+  }
+  .dark .icon-picker-item {
+    background: rgba(255,255,255,0.04);
+  }
+
+  /* 响应式 */
+  @media (max-width: 640px) {
+    .admin-page .admin-toolbar {
+      flex-wrap: wrap;
+    }
+    .menu-search-wrap {
+      max-width: 100%;
+      width: 100%;
+      order: -1;
+    }
+    .icon-picker-item {
+      min-width: 52px;
+      padding: 4px 2px;
+    }
+    .icon-picker-item-label {
+      font-size: 0.58rem;
+      max-width: 48px;
+    }
+  }
+</style>

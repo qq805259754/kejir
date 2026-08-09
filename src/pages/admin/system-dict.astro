@@ -1,0 +1,595 @@
+---
+/**
+ * 系统管理 - 字典管理 - /admin/system-dict
+ * 接口：
+ *   字典类型 GET /sys/dict | POST /sys/dict/add | PUT /sys/dict/update | DELETE /sys/dict/delete/{id}
+ *   字典数据 GET /sys/dictData/list | POST /sys/dictData/add | PUT /sys/dictData/update | DELETE /sys/dictData/delete/{ids}
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="字典管理" description="字典管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>字典管理</h1>
+      <p class="page-sub">维护系统字典类型与字典数据，用于下拉选项、状态标签等</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-name">字典名称</label>
+        <input type="text" id="search-name" class="glass-input" placeholder="请输入字典名称" />
+      </div>
+      <div class="admin-search-field">
+        <label for="search-status">状态</label>
+        <select id="search-status" class="glass-input">
+          <option value="">全部</option>
+          <option value="1">启用</option>
+          <option value="0">禁用</option>
+        </select>
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">搜索</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-add">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+      var tableContainer = document.getElementById('table-container');
+      var paginationContainer = document.getElementById('pagination-container');
+
+      // ===== 登录状态检查 =====
+      if (!Admin.isLoggedIn()) {
+        location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+        return;
+      }
+
+      // ===== 页面状态 =====
+      var state = {
+        pageNum: 1,
+        pageSize: 10,
+        total: 0,
+        query: { name: '', status: '' },
+        loading: false,
+        selectedIds: [],
+        list: [],
+      };
+
+      function statusBadge(status) {
+        var s = Number(status);
+        if (s === 1) return Admin.badge('启用', 'success');
+        if (s === 0) return Admin.badge('禁用', 'danger');
+        return Admin.badge('未知', 'default');
+      }
+
+      // ===== 列配置 =====
+      var columns = [
+        { type: 'checkbox' },
+        {
+          key: 'name', title: '字典名称',
+          render: function (row) { return '<span style="font-weight:600;">' + Admin.esc(row.name) + '</span>'; }
+        },
+        {
+          key: 'type', title: '字典类型', align: 'center',
+          render: function (row) { return Admin.badge(row.type || '', 'warning'); }
+        },
+        {
+          key: 'status', title: '状态', width: '90px', align: 'center',
+          render: function (row) { return statusBadge(row.status); }
+        },
+        {
+          key: 'remark', title: '备注',
+          render: function (row) {
+            var d = row.remark || '';
+            return d.length > 40 ? Admin.esc(d.slice(0, 40)) + '…' : Admin.esc(d);
+          }
+        },
+        {
+          key: 'createTime', title: '创建时间', width: '160px',
+          render: function (row) { return Admin.formatDate(row.createTime, true); }
+        },
+        {
+          title: '操作', width: '220px', align: 'center',
+          render: function (row) {
+            return Admin.actBtn('字典数据', 'act-success', null, row.id) +
+              Admin.actBtn('修改', 'act-edit', null, row.id) +
+              Admin.actBtn('删除', 'act-del', null, row.id);
+          }
+        },
+      ];
+
+      // ===== 加载列表 =====
+      function loadList() {
+        if (state.loading) return;
+        state.loading = true;
+        Admin.showLoading(tableContainer);
+        var params = {
+          pageNum: state.pageNum,
+          pageSize: state.pageSize,
+          name: state.query.name,
+          status: state.query.status,
+        };
+        Admin.api.get('/sys/dict', params).then(function (data) {
+          state.loading = false;
+          var page = Admin.getPageRecords(data);
+          if (page.list.length === 0 && state.pageNum > 1) {
+            var tp = Math.ceil(page.total / state.pageSize) || 1;
+            state.pageNum = Math.min(state.pageNum - 1, tp);
+            if (state.pageNum < 1) state.pageNum = 1;
+            return loadList();
+          }
+          state.list = page.list;
+          state.total = page.total;
+          Admin.renderTable(tableContainer, columns, page.list, {
+            emptyText: '暂无字典数据',
+            onSelectionChange: function (ids) { state.selectedIds = ids; }
+          });
+          Admin.renderPagination(paginationContainer, {
+            current: state.pageNum,
+            pageSize: state.pageSize,
+            total: state.total,
+            onChange: function (pageNum, pageSize) {
+              state.pageNum = pageNum;
+              state.pageSize = pageSize;
+              loadList();
+            }
+          });
+        }).catch(function (err) {
+          state.loading = false;
+          Admin.showError(tableContainer, err.message);
+        });
+      }
+
+      function doSearch() {
+        state.query.name = (document.getElementById('search-name').value || '').trim();
+        state.query.status = document.getElementById('search-status').value;
+        state.pageNum = 1;
+        loadList();
+      }
+      function doReset() {
+        document.getElementById('search-name').value = '';
+        document.getElementById('search-status').value = '';
+        state.query.name = '';
+        state.query.status = '';
+        state.pageNum = 1;
+        loadList();
+      }
+
+      // ===== 字典类型表单 =====
+      function dictFormHtml() {
+        return '<form id="edit-form">' +
+          '<div class="admin-form-group">' +
+            '<label>字典名称 <span class="req">*</span></label>' +
+            '<input type="text" name="name" class="glass-input" placeholder="请输入字典名称" required />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>字典类型 <span class="req">*</span></label>' +
+            '<input type="text" name="type" class="glass-input" placeholder="请输入字典类型" required />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>状态 <span class="req">*</span></label>' +
+            '<select name="status" class="glass-input">' +
+              '<option value="1">启用</option>' +
+              '<option value="0">禁用</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>备注</label>' +
+            '<textarea name="remark" class="glass-input" placeholder="请输入备注"></textarea>' +
+          '</div>' +
+        '</form>';
+      }
+
+      function openDictModal(row) {
+        var isEdit = !!row;
+        Admin.openModal({
+          title: isEdit ? '修改字典' : '新增字典',
+          body: dictFormHtml(),
+          width: '520px',
+          footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+            '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-save">保存</button>',
+          onOpen: function (modal) {
+            var form = modal.querySelector('#edit-form');
+            if (isEdit) Admin.fillForm(form, row);
+            var saveBtn = modal.querySelector('#btn-save');
+            saveBtn.addEventListener('click', function () {
+              if (!form.name.value.trim() || !form.type.value.trim()) {
+                Admin.toast('请填写字典名称与字典类型', 'error');
+                return;
+              }
+              var data = Admin.serializeForm(form);
+              data.status = Number(data.status);
+              var promise;
+              if (isEdit) {
+                data.id = row.id;
+                promise = Admin.api.put('/sys/dict/update', data);
+              } else {
+                promise = Admin.api.post('/sys/dict/add', data);
+              }
+              saveBtn.disabled = true;
+              promise.then(function () {
+                Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+                Admin.closeModal();
+                loadList();
+              }).catch(function (err) {
+                saveBtn.disabled = false;
+                Admin.toast(err.message || '保存失败', 'error');
+              });
+            });
+          }
+        });
+      }
+
+      function handleDelete(id) {
+        Admin.confirm('确定要删除该字典吗？', function () {
+          Admin.api.del('/sys/dict/delete/' + encodeURIComponent(id)).then(function () {
+            Admin.toast('删除成功', 'success');
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+
+      function handleBatchDelete() {
+        var ids = state.selectedIds;
+        if (!ids || ids.length === 0) {
+          Admin.toast('请先选择要删除的数据', 'info');
+          return;
+        }
+        Admin.confirm('确定要删除选中的 ' + ids.length + ' 条数据吗？', function () {
+          Admin.api.del('/sys/dict/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+            Admin.toast('批量删除成功', 'success');
+            state.selectedIds = [];
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '批量删除失败', 'error');
+          });
+        });
+      }
+
+      function findRowById(id) {
+        for (var i = 0; i < state.list.length; i++) {
+          if (String(state.list[i].id) === String(id)) return state.list[i];
+        }
+        return null;
+      }
+
+      // ============================================================
+      // ===== 字典数据弹窗 =====
+      // ============================================================
+      var dataState = {
+        dict: null,
+        pageNum: 1,
+        pageSize: 10,
+        total: 0,
+        list: [],
+        selectedIds: [],
+        loading: false,
+      };
+
+      function statusBadgeData(status) {
+        var s = Number(status);
+        if (s === 1) return Admin.badge('启用', 'success');
+        if (s === 0) return Admin.badge('禁用', 'danger');
+        return Admin.badge('未知', 'default');
+      }
+
+      var dataColumns = [
+        { type: 'checkbox' },
+        { key: 'label', title: '字典标签' },
+        {
+          key: 'value', title: '字典键值', align: 'center',
+          render: function (row) { return Admin.badge(row.value, 'info'); }
+        },
+        { key: 'sort', title: '排序', width: '70px', align: 'center' },
+        {
+          key: 'status', title: '状态', width: '90px', align: 'center',
+          render: function (row) { return statusBadgeData(row.status); }
+        },
+        {
+          title: '操作', width: '140px', align: 'center',
+          render: function (row) {
+            return Admin.actBtn('修改', 'act-edit', null, row.id) +
+              Admin.actBtn('删除', 'act-del', null, row.id);
+          }
+        },
+      ];
+
+      function loadDataList() {
+        if (!dataState.dict) return;
+        dataState.loading = true;
+        Admin.showLoading(document.getElementById('dict-data-table'));
+        Admin.api.get('/sys/dictData/list', {
+          pageNum: dataState.pageNum,
+          pageSize: dataState.pageSize,
+          dictId: dataState.dict.id,
+        }).then(function (data) {
+          dataState.loading = false;
+          var page = Admin.getPageRecords(data);
+          if (page.list.length === 0 && dataState.pageNum > 1) {
+            var tp = Math.ceil(page.total / dataState.pageSize) || 1;
+            dataState.pageNum = Math.min(dataState.pageNum - 1, tp);
+            if (dataState.pageNum < 1) dataState.pageNum = 1;
+            return loadDataList();
+          }
+          dataState.list = page.list;
+          dataState.total = page.total;
+          dataState.selectedIds = [];
+          Admin.renderTable(document.getElementById('dict-data-table'), dataColumns, page.list, {
+            emptyText: '暂无字典数据',
+            onSelectionChange: function (ids) { dataState.selectedIds = ids; }
+          });
+          Admin.renderPagination(document.getElementById('dict-data-pagination'), {
+            current: dataState.pageNum,
+            pageSize: dataState.pageSize,
+            total: dataState.total,
+            onChange: function (pageNum, pageSize) {
+              dataState.pageNum = pageNum;
+              dataState.pageSize = pageSize;
+              loadDataList();
+            }
+          });
+        }).catch(function (err) {
+          dataState.loading = false;
+          Admin.showError(document.getElementById('dict-data-table'), err.message);
+        });
+      }
+
+      function dictDataFormHtml() {
+        return '<form id="data-form">' +
+          '<div class="admin-form-group">' +
+            '<label>字典类型</label>' +
+            '<input type="text" name="dictType" class="glass-input" disabled />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>数据标签 <span class="req">*</span></label>' +
+            '<input type="text" name="label" class="glass-input" placeholder="请输入数据标签" required />' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>数据键值 <span class="req">*</span></label>' +
+            '<input type="text" name="value" class="glass-input" placeholder="请输入数据键值" required />' +
+          '</div>' +
+          '<div class="admin-form-row">' +
+            '<div class="admin-form-group">' +
+              '<label>显示排序</label>' +
+              '<input type="number" name="sort" class="glass-input" min="0" value="0" data-type="number" />' +
+            '</div>' +
+            '<div class="admin-form-group">' +
+              '<label>回显样式</label>' +
+              '<select name="style" class="glass-input">' +
+                '<option value="primary">primary</option>' +
+                '<option value="success">success</option>' +
+                '<option value="info">info</option>' +
+                '<option value="warning">warning</option>' +
+                '<option value="danger">danger</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>状态 <span class="req">*</span></label>' +
+            '<select name="status" class="glass-input">' +
+              '<option value="1">启用</option>' +
+              '<option value="0">禁用</option>' +
+            '</select>' +
+          '</div>' +
+          '<div class="admin-form-group">' +
+            '<label>备注</label>' +
+            '<textarea name="remark" class="glass-input" placeholder="请输入备注"></textarea>' +
+          '</div>' +
+        '</form>';
+      }
+
+      // 字典数据表单以「内联视图」方式展示，避免嵌套弹窗互相关闭
+      function showDataFormView(row) {
+        var isEdit = !!row;
+        var modal = document.getElementById('admin-modal-active');
+        if (!modal) return;
+        var listView = modal.querySelector('#dict-data-list-view');
+        var formView = modal.querySelector('#dict-data-form-view');
+        // 填充表单
+        formView.innerHTML = '<h4 class="dict-data-form-title">' + (isEdit ? '修改字典数据' : '新增字典数据') + '</h4>' + dictDataFormHtml() +
+          '<div class="admin-modal-footer" style="border:none;padding:0;margin-top:var(--sp-3);">' +
+            '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-data-cancel">取消</button>' +
+            '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-data-save">保存</button>' +
+          '</div>';
+        var form = formView.querySelector('#data-form');
+        var typeInput = form.querySelector('[name="dictType"]');
+        typeInput.value = dataState.dict.type || '';
+        if (isEdit) Admin.fillForm(form, row);
+        // 切换视图
+        listView.style.display = 'none';
+        formView.style.display = '';
+        // 取消
+        formView.querySelector('#btn-data-cancel').addEventListener('click', function () {
+          formView.style.display = 'none';
+          listView.style.display = '';
+        });
+        // 保存
+        var saveBtn = formView.querySelector('#btn-data-save');
+        saveBtn.addEventListener('click', function () {
+          if (!form.label.value.trim() || !form.value.value.trim()) {
+            Admin.toast('请填写数据标签与键值', 'error');
+            return;
+          }
+          var data = Admin.serializeForm(form);
+          data.dictId = dataState.dict.id;
+          data.dictType = dataState.dict.type;
+          data.status = Number(data.status);
+          var promise;
+          if (isEdit) {
+            data.id = row.id;
+            promise = Admin.api.put('/sys/dictData/update', data);
+          } else {
+            promise = Admin.api.post('/sys/dictData/add', data);
+          }
+          saveBtn.disabled = true;
+          promise.then(function () {
+            Admin.toast(isEdit ? '修改成功' : '新增成功', 'success');
+            formView.style.display = 'none';
+            listView.style.display = '';
+            loadDataList();
+          }).catch(function (err) {
+            saveBtn.disabled = false;
+            Admin.toast(err.message || '保存失败', 'error');
+          });
+        });
+      }
+
+      function handleDataDelete(id) {
+        Admin.confirm('确定要删除该字典数据吗？', function () {
+          Admin.api.del('/sys/dictData/delete/' + encodeURIComponent(id)).then(function () {
+            Admin.toast('删除成功', 'success');
+            loadDataList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+
+      function handleDataBatchDelete() {
+        var ids = dataState.selectedIds;
+        if (!ids || ids.length === 0) {
+          Admin.toast('请先选择要删除的数据', 'info');
+          return;
+        }
+        Admin.confirm('确定要删除选中的 ' + ids.length + ' 条数据吗？', function () {
+          Admin.api.del('/sys/dictData/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+            Admin.toast('批量删除成功', 'success');
+            dataState.selectedIds = [];
+            loadDataList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '批量删除失败', 'error');
+          });
+        });
+      }
+
+      function findDataRowById(id) {
+        for (var i = 0; i < dataState.list.length; i++) {
+          if (String(dataState.list[i].id) === String(id)) return dataState.list[i];
+        }
+        return null;
+      }
+
+      function openDictDataModal(dictRow) {
+        dataState.dict = dictRow;
+        dataState.pageNum = 1;
+        dataState.pageSize = (window.__DEFAULT_PAGE_SIZE__ || 10);
+        dataState.selectedIds = [];
+        Admin.openModal({
+          title: '字典数据 - ' + (dictRow.name || ''),
+          width: '860px',
+          body: '<div class="dict-data-wrap">' +
+            '<div id="dict-data-list-view">' +
+              '<div class="admin-toolbar">' +
+                '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-data-add">' +
+                  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增</button>' +
+                '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-data-batch-del">' +
+                  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>批量删除</button>' +
+              '</div>' +
+              '<div id="dict-data-table"></div>' +
+              '<div id="dict-data-pagination"></div>' +
+            '</div>' +
+            '<div id="dict-data-form-view" style="display:none;"></div>' +
+          '</div>',
+          footer: '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>关闭</button>',
+          onOpen: function (modal) {
+            modal.querySelector('#btn-data-add').addEventListener('click', function () { showDataFormView(null); });
+            modal.querySelector('#btn-data-batch-del').addEventListener('click', handleDataBatchDelete);
+            // 字典数据表格操作事件委托
+            var dataTbl = modal.querySelector('#dict-data-table');
+            dataTbl.addEventListener('click', function (e) {
+              var btn = e.target.closest('[data-id]');
+              if (!btn) return;
+              var id = btn.getAttribute('data-id');
+              if (btn.classList.contains('act-edit')) {
+                var row = findDataRowById(id);
+                if (row) showDataFormView(row);
+              } else if (btn.classList.contains('act-del')) {
+                handleDataDelete(id);
+              }
+            });
+            loadDataList();
+          }
+        });
+      }
+
+      // ===== 事件绑定 =====
+      document.getElementById('btn-search').addEventListener('click', doSearch);
+      document.getElementById('btn-reset').addEventListener('click', doReset);
+      document.getElementById('btn-add').addEventListener('click', function () { openDictModal(null); });
+      document.getElementById('btn-batch-del').addEventListener('click', handleBatchDelete);
+      document.getElementById('search-name').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') doSearch();
+      });
+      // 表格操作事件委托
+      tableContainer.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-id]');
+        if (!btn) return;
+        var id = btn.getAttribute('data-id');
+        if (btn.classList.contains('act-success')) {
+          var row = findRowById(id);
+          if (row) openDictDataModal(row);
+        } else if (btn.classList.contains('act-edit')) {
+          var row2 = findRowById(id);
+          if (row2) openDictModal(row2);
+        } else if (btn.classList.contains('act-del')) {
+          handleDelete(id);
+        }
+      });
+
+      // ===== 初始化 =====
+      loadList();
+    }
+  })();
+</script>
+
+<style>
+  .dict-data-wrap .admin-toolbar { margin-bottom: var(--sp-3); }
+  .dict-data-form-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--sp-4);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .flat .dict-data-form-title { border-bottom-color: var(--border); }
+</style>

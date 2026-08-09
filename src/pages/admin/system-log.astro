@@ -1,0 +1,256 @@
+---
+/**
+ * 系统管理 - 操作日志 - /admin/system-log
+ * 只读列表，支持查看详情和批量删除，无新增/编辑
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="操作日志" description="操作日志" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>操作日志</h1>
+      <p class="page-sub">查看系统操作记录，追踪用户行为与请求详情</p>
+    </div>
+
+    <!-- 搜索栏（仅刷新） -->
+    <div class="admin-search-bar" id="search-bar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-refresh">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var tableContainer = document.getElementById('table-container');
+    var paginationContainer = document.getElementById('pagination-container');
+    var selectedIds = [];
+    var lastList = [];
+
+    // 请求方法徽章颜色映射
+    var methodBadgeMap = { GET: 'info', POST: 'success', PUT: 'warning', DELETE: 'danger' };
+
+    // ===== 列配置（对齐参考项目：操作人/请求接口/请求方式/接口名/IP/IP来源/请求耗时/创建时间/操作-删除） =====
+    var columns = [
+      { type: 'checkbox' },
+      {
+        key: 'operor', title: '操作人', width: '120px',
+        render: function (row) {
+          var name = row.operor || row.username || row.operator || '-';
+          return '<span>' + Admin.esc(name) + '</span>';
+        }
+      },
+      {
+        key: 'requestUrl', title: '请求接口',
+        render: function (row) {
+          var url = row.requestUrl || row.url || '-';
+          return '<code style="font-size:0.78rem;color:var(--text-secondary);word-break:break-all;">' + Admin.esc(url) + '</code>';
+        }
+      },
+      {
+        key: 'type', title: '请求方式', align: 'center', width: '90px',
+        render: function (row) {
+          return Admin.badge(row.type || '-', methodBadgeMap[row.type] || 'default');
+        }
+      },
+      {
+        key: 'operationName', title: '接口名',
+        render: function (row) {
+          return '<span style="font-weight:600;">' + Admin.esc(row.operationName || '-') + '</span>';
+        }
+      },
+      {
+        key: 'ip', title: 'IP', width: '130px',
+        render: function (row) {
+          return '<code style="font-size:0.8rem;">' + Admin.esc(row.ip || '-') + '</code>';
+        }
+      },
+      {
+        key: 'source', title: 'IP来源', width: '140px',
+        render: function (row) {
+          return '<span style="color:var(--text-secondary);font-size:0.82rem;">' + Admin.esc(row.source || row.ipSource || '-') + '</span>';
+        }
+      },
+      {
+        key: 'spendTime', title: '请求耗时', align: 'center', width: '100px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;">' + Admin.esc(row.spendTime) + ' ms</span>';
+        }
+      },
+      {
+        key: 'createTime', title: '创建时间', width: '150px',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.formatDate(row.createTime, true) + '</span>';
+        }
+      },
+      {
+        key: 'actions', title: '操作', width: '90px', align: 'center',
+        render: function (row) {
+          return Admin.actBtn('删除', 'act-del', null, row.id);
+        }
+      },
+    ];
+
+    // ===== CRUD 列表工厂 =====
+    var crud = Admin.createCrudList({
+      container: tableContainer,
+      paginationEl: paginationContainer,
+      columns: columns,
+      listApi: function (params) {
+        return Admin.api.get('/sys/operateLog', params).then(function (data) {
+          lastList = Admin.getPageRecords(data).list;
+          return data;
+        });
+      },
+      deleteApi: function (id) { return Admin.api.del('/sys/operateLog/delete/' + id); },
+      deleteLabel: function (row) { return row.operationName || ('ID:' + row.id); },
+      emptyText: '暂无操作日志',
+      onSelectionChange: function (ids) { selectedIds = ids; },
+    });
+
+    // ===== 查看详情弹窗 =====
+    function openDetailModal(row) {
+      var fields = [
+        { label: '操作名称', key: 'operationName' },
+        { label: '操作方法', key: 'methodName' },
+        { label: '操作人', key: 'username' },
+        { label: '请求方法', key: 'type' },
+        { label: '请求URL', key: 'requestUrl' },
+        { label: '请求参数', key: 'paramsJson', long: true },
+        { label: 'IP地址', key: 'ip' },
+        { label: '地理位置', key: 'source' },
+        { label: '耗时(ms)', key: 'spendTime' },
+        { label: '控制器类', key: 'classPath' },
+        { label: '操作时间', key: 'createTime' },
+      ];
+
+      var body = '<div class="log-detail-list">';
+      fields.forEach(function (f) {
+        var val = row[f.key];
+        if (val === undefined || val === null || val === '') val = '-';
+        var valHtml = f.long && val !== '-'
+          ? '<pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-size:0.8rem;">' + Admin.esc(val) + '</pre>'
+          : Admin.esc(val);
+        body +=
+          '<div class="log-detail-row">' +
+            '<div class="log-detail-label">' + Admin.esc(f.label) + '</div>' +
+            '<div class="log-detail-value' + (f.long ? ' log-detail-long' : '') + '">' + valHtml + '</div>' +
+          '</div>';
+      });
+      body += '</div>';
+
+      var footer = '<button class="glass-btn glass-btn-primary glass-btn-sm" data-modal-close>关闭</button>';
+
+      Admin.openModal({
+        title: '日志详情',
+        body: body,
+        footer: footer,
+        width: '680px',
+      });
+    }
+
+    // ===== 根据 ID 查找行数据 =====
+    function findRowById(id) {
+      for (var i = 0; i < lastList.length; i++) {
+        if (String(lastList[i].id) === String(id)) return lastList[i];
+      }
+      return null;
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-refresh').addEventListener('click', function () {
+      crud.refresh();
+    });
+    document.getElementById('btn-batch-del').addEventListener('click', function () {
+      crud.batchDelete(selectedIds);
+    });
+
+    // 表格操作事件委托（删除）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-id]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-id');
+      if (btn.classList.contains('act-del')) {
+        var row = findRowById(id);
+        crud.deleteRow(row || { id: id });
+      }
+    });
+
+    // ===== 初始化 =====
+    crud.load();
+    }
+  })();
+</script>
+
+<style is:global>
+  .log-detail-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .log-detail-row {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .log-detail-row:last-child {
+    border-bottom: none;
+  }
+  .log-detail-label {
+    width: 100px;
+    flex-shrink: 0;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+  }
+  .log-detail-value {
+    flex: 1;
+    font-size: 0.86rem;
+    color: var(--text-primary);
+    word-break: break-all;
+  }
+  .log-detail-long {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+</style>

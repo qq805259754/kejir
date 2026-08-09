@@ -1,0 +1,207 @@
+---
+/**
+ * 管理后台 - 留言管理 - /admin/message-message
+ * API: GET  /sys/message/list?pageNum&pageSize
+ *      DELETE /sys/message/delete/{ids}（支持批量逗号分隔）
+ * 仅删除操作，无新增/编辑
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="留言管理" description="留言管理" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>留言管理</h1>
+      <p class="page-sub">管理留言板留言，支持查看与批量删除</p>
+    </div>
+
+    <!-- 搜索栏（仅刷新） -->
+    <div class="admin-search-bar" id="search-bar">
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+      var tableContainer = document.getElementById('table-container');
+      var paginationContainer = document.getElementById('pagination-container');
+      var btnRefresh = document.getElementById('btn-refresh');
+      var btnBatchDel = document.getElementById('btn-batch-del');
+
+      // ===== 登录检查 =====
+      if (!Admin.isLoggedIn()) {
+        location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+        return;
+      }
+
+      var state = {
+        pageNum: 1,
+        pageSize: (window.__DEFAULT_PAGE_SIZE__ || 10),
+        total: 0,
+        loading: false,
+        selectedIds: [],
+      };
+
+      // ===== 工具：头像 =====
+      function avatar(src, alt) {
+        if (!src) return '<span style="color:var(--text-tertiary);font-size:0.8rem;">无</span>';
+        return '<img src="' + Admin.esc(src) + '" alt="' + Admin.esc(alt || '') + '" style="width:34px;height:34px;border-radius:50%;object-fit:cover;vertical-align:middle;" onerror="this.style.display=\'none\'" />';
+      }
+
+      // ===== 工具：单行截断 =====
+      function ellipsis(text, max) {
+        var s = text == null ? '' : String(text);
+        return '<div style="max-width:' + (max || 240) + 'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + Admin.esc(s) + '">' + Admin.esc(s) + '</div>';
+      }
+
+      // ===== 列配置 =====
+      var columns = [
+        { type: 'checkbox' },
+        { title: '留言人', render: function (row) {
+            return '<div style="display:flex;align-items:center;gap:8px;">' +
+              avatar(row.avatar, row.nickname) +
+              '<span>' + Admin.esc(row.nickname || '-') + '</span></div>';
+          } },
+        { title: 'IP地址', render: function (row) {
+            return '<span style="font-family:var(--font-mono,monospace);font-size:0.8rem;color:var(--text-tertiary);">' + Admin.esc(row.ip || '-') + '</span>';
+          } },
+        { title: 'IP来源', render: function (row) { return Admin.esc(row.source || '-'); } },
+        { title: '留言内容', render: function (row) { return ellipsis(row.content, 280); } },
+        { title: '创建时间', render: function (row) { return Admin.formatDate(row.createTime, true); } },
+        { title: '操作', align: 'center', render: function (row) {
+            return '<span class="col-actions">' +
+              '<button type="button" class="act-del" data-action="delete" data-id="' + Admin.esc(row.id) + '">删除</button>' +
+              '</span>';
+          } },
+      ];
+
+      // ===== 加载列表 =====
+      function loadList() {
+        if (state.loading) return;
+        state.loading = true;
+        Admin.showLoading(tableContainer);
+        Admin.api.get('/sys/message/list', {
+          pageNum: state.pageNum,
+          pageSize: state.pageSize,
+        }).then(function (data) {
+          state.loading = false;
+          var page = Admin.getPageRecords(data);
+          // 当前页为空且非首页：直接跳到最后一页
+          if (page.list.length === 0 && state.pageNum > 1) {
+            var tp = Math.ceil(page.total / state.pageSize) || 1;
+            state.pageNum = Math.min(state.pageNum - 1, tp);
+            if (state.pageNum < 1) state.pageNum = 1;
+            return loadList();
+          }
+          state.total = page.total;
+          renderTableData(page.list);
+          renderPager();
+        }).catch(function (err) {
+          state.loading = false;
+          Admin.showError(tableContainer, err.message);
+        });
+      }
+
+      function renderTableData(list) {
+        Admin.renderTable(tableContainer, columns, list, {
+          emptyText: '暂无留言数据',
+          onSelectionChange: function (ids) { state.selectedIds = ids; },
+        });
+      }
+
+      function renderPager() {
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          },
+        });
+      }
+
+      // ===== 删除（单条） =====
+      function handleDelete(id) {
+        Admin.confirm('确定要删除该留言吗？', function () {
+          Admin.api.del('/sys/message/delete/' + encodeURIComponent(id)).then(function () {
+            Admin.toast('删除成功', 'success');
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 批量删除 =====
+      function handleBatchDelete() {
+        var ids = state.selectedIds;
+        if (!ids || ids.length === 0) {
+          Admin.toast('请先选择要删除的留言', 'info');
+          return;
+        }
+        Admin.confirm('确定要删除选中的 ' + ids.length + ' 条留言吗？', function () {
+          Admin.api.del('/sys/message/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+            Admin.toast('批量删除成功', 'success');
+            state.selectedIds = [];
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '批量删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 事件绑定 =====
+      // 表格操作按钮（事件委托）
+      tableContainer.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var action = btn.getAttribute('data-action');
+        var id = btn.getAttribute('data-id');
+        if (action === 'delete') handleDelete(id);
+      });
+
+      btnRefresh.addEventListener('click', function () { loadList(); });
+      btnBatchDel.addEventListener('click', handleBatchDelete);
+
+      // ===== 启动 =====
+      loadList();
+    }
+  })();
+</script>

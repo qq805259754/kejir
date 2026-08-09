@@ -1,0 +1,534 @@
+---
+/**
+ * 管理后台 - 系统工具 - 代码生成 - /admin/tool-gen
+ * API: GET    /tool/gen/list?pageNum&pageSize&tableName&tableComment
+ *      GET    /tool/gen/db/list?pageNum&pageSize&tableName&tableComment  （查询数据库可导入的表）
+ *      POST   /tool/gen/importTable    （body: { tables: "t1,t2", }）
+ *      GET    /tool/gen/preview/{tableId}  （预览生成代码，返回 {fileName: code} 映射）
+ *      GET    /tool/gen/download/{tableName}  （下载 zip）
+ *      GET    /tool/gen/genCode/{tableName}   （生成代码到服务端目录）
+ *      DELETE /tool/gen/delete/{tableIds}     （支持批量逗号分隔）
+ * 操作：导入表 / 预览 / 下载 / 生成代码 / 删除
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="代码生成" description="代码生成工具" currentPath="/admin">
+  <div class="content-zone admin-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>代码生成</h1>
+      <p class="page-sub">从数据库表生成前后端代码，支持预览、下载和直接生成</p>
+    </div>
+
+    <!-- 搜索栏 -->
+    <div class="admin-search-bar" id="search-bar">
+      <div class="admin-search-field">
+        <label for="search-table-name">表名称</label>
+        <input class="glass-input" id="search-table-name" type="text" placeholder="请输入表名称" />
+      </div>
+      <div class="admin-search-field">
+        <label for="search-table-comment">表描述</label>
+        <input class="glass-input" id="search-table-comment" type="text" placeholder="请输入表描述" />
+      </div>
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        搜索
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset" type="button">重置</button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        刷新
+      </button>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="admin-toolbar">
+      <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-import" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导入表
+      </button>
+      <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-batch-del" type="button">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        批量删除
+      </button>
+    </div>
+
+    <!-- 表格容器 -->
+    <div id="table-container"></div>
+
+    <!-- 分页容器 -->
+    <div id="pagination-container"></div>
+  </div>
+</BaseLayout>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+      var tableContainer = document.getElementById('table-container');
+      var paginationContainer = document.getElementById('pagination-container');
+      var inputTableName = document.getElementById('search-table-name');
+      var inputTableComment = document.getElementById('search-table-comment');
+      var btnSearch = document.getElementById('btn-search');
+      var btnReset = document.getElementById('btn-reset');
+      var btnRefresh = document.getElementById('btn-refresh');
+      var btnImport = document.getElementById('btn-import');
+      var btnBatchDel = document.getElementById('btn-batch-del');
+
+      // ===== 登录检查 =====
+      if (!Admin.isLoggedIn()) {
+        location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+        return;
+      }
+
+      var state = {
+        pageNum: 1,
+        pageSize: 10,
+        total: 0,
+        loading: false,
+        selectedIds: [],
+        query: { tableName: '', tableComment: '' },
+      };
+
+      // ===== 列配置 =====
+      var columns = [
+        { type: 'checkbox' },
+        { title: '表名称', render: function (row) { return '<span style="font-weight:600;font-family:var(--font-mono,monospace);font-size:0.84rem;">' + Admin.esc(row.tableName || '-') + '</span>'; } },
+        { title: '表描述', render: function (row) { return Admin.esc(row.tableComment || '-'); } },
+        { title: '实体类', render: function (row) {
+            return '<span style="font-family:var(--font-mono,monospace);font-size:0.82rem;color:var(--text-tertiary);">' + Admin.esc(row.className || row.tableName || '-') + '</span>';
+          } },
+        { title: '创建时间', width: '150px', render: function (row) { return Admin.formatDate(row.createTime, true); } },
+        { title: '操作', align: 'center', width: '200px', render: function (row) {
+            return '<span class="col-actions">' +
+              '<button type="button" class="act-preview" data-action="preview" data-id="' + Admin.esc(row.tableId) + '">预览</button>' +
+              '<button type="button" class="act-del" data-action="delete" data-id="' + Admin.esc(row.tableId) + '">删除</button>' +
+              '<button type="button" class="act-sync" data-action="sync" data-name="' + Admin.esc(row.tableName) + '">同步</button>' +
+              '</span>';
+          } },
+      ];
+
+      // ===== 加载列表 =====
+      function loadList() {
+        if (state.loading) return;
+        state.loading = true;
+        Admin.showLoading(tableContainer);
+        var params = {
+          pageNum: state.pageNum,
+          pageSize: state.pageSize,
+        };
+        if (state.query.tableName) params.tableName = state.query.tableName;
+        if (state.query.tableComment) params.tableComment = state.query.tableComment;
+        Admin.api.get('/tool/gen/list', params).then(function (data) {
+          state.loading = false;
+          var page = Admin.getPageRecords(data);
+          if (page.list.length === 0 && state.pageNum > 1) {
+            var tp = Math.ceil(page.total / state.pageSize) || 1;
+            state.pageNum = Math.min(state.pageNum - 1, tp);
+            if (state.pageNum < 1) state.pageNum = 1;
+            return loadList();
+          }
+          state.total = page.total;
+          renderTableData(page.list);
+          renderPager();
+        }).catch(function (err) {
+          state.loading = false;
+          Admin.showError(tableContainer, err.message);
+        });
+      }
+
+      function renderTableData(list) {
+        Admin.renderTable(tableContainer, columns, list, {
+          emptyText: '暂无代码生成配置，请点击「导入表」',
+          onSelectionChange: function (ids) { state.selectedIds = ids; },
+        });
+      }
+
+      function renderPager() {
+        Admin.renderPagination(paginationContainer, {
+          current: state.pageNum,
+          pageSize: state.pageSize,
+          total: state.total,
+          onChange: function (pageNum, pageSize) {
+            state.pageNum = pageNum;
+            state.pageSize = pageSize;
+            loadList();
+          },
+        });
+      }
+
+      // ===== 搜索 / 重置 =====
+      function doSearch() {
+        state.query.tableName = (inputTableName.value || '').trim();
+        state.query.tableComment = (inputTableComment.value || '').trim();
+        state.pageNum = 1;
+        loadList();
+      }
+      function doReset() {
+        inputTableName.value = '';
+        inputTableComment.value = '';
+        state.query = { tableName: '', tableComment: '' };
+        state.pageNum = 1;
+        loadList();
+      }
+
+      // ===== 删除（单条） =====
+      function handleDelete(id) {
+        Admin.confirm('确定要删除该代码生成配置吗？', function () {
+          Admin.api.del('/tool/gen/delete/' + encodeURIComponent(id)).then(function () {
+            Admin.toast('删除成功', 'success');
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 批量删除 =====
+      function handleBatchDelete() {
+        var ids = state.selectedIds;
+        if (!ids || ids.length === 0) {
+          Admin.toast('请先选择要删除的配置', 'info');
+          return;
+        }
+        Admin.confirm('确定要删除选中的 ' + ids.length + ' 条配置吗？', function () {
+          Admin.api.del('/tool/gen/delete/' + encodeURIComponent(ids.join(','))).then(function () {
+            Admin.toast('批量删除成功', 'success');
+            state.selectedIds = [];
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '批量删除失败', 'error');
+          });
+        });
+      }
+
+      // ===== 预览代码 =====
+      function previewCode(tableId) {
+        Admin.showLoading(tableContainer);
+        Admin.api.get('/tool/gen/preview/' + encodeURIComponent(tableId)).then(function (data) {
+          Admin.showLoading(tableContainer); // 恢复 loading 状态，待 modal 打开后恢复
+          if (!data || typeof data !== 'object') {
+            Admin.toast('未获取到预览数据', 'error');
+            loadList();
+            return;
+          }
+          var fileNames = Object.keys(data);
+          if (fileNames.length === 0) {
+            Admin.toast('暂无生成代码', 'info');
+            loadList();
+            return;
+          }
+
+          // 构建左侧文件列表 + 右侧代码展示
+          var firstFile = fileNames[0];
+          var fileListHtml = fileNames.map(function (name, idx) {
+            return '<button type="button" class="gen-file-tab' + (idx === 0 ? ' active' : '') + '" data-file="' + Admin.esc(name) + '">' + Admin.esc(name) + '</button>';
+          }).join('');
+
+          var body =
+            '<div class="gen-preview-wrap">' +
+              '<div class="gen-file-list">' + fileListHtml + '</div>' +
+              '<div class="gen-code-viewer">' +
+                '<pre class="gen-code-block"><code id="gen-code-content">' + Admin.esc(data[firstFile] || '') + '</code></pre>' +
+              '</div>' +
+            '</div>';
+
+          var footer =
+            '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>关闭</button>';
+
+          Admin.openModal({
+            title: '代码预览',
+            body: body,
+            footer: footer,
+            onOpen: function (modal) {
+              // 文件切换
+              modal.querySelectorAll('.gen-file-tab').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                  var fileName = this.getAttribute('data-file');
+                  modal.querySelectorAll('.gen-file-tab').forEach(function (t) { t.classList.remove('active'); });
+                  this.classList.add('active');
+                  var codeEl = modal.querySelector('#gen-code-content');
+                  if (codeEl) codeEl.textContent = data[fileName] || '';
+                });
+              });
+            },
+          });
+          // 恢复表格
+          loadList();
+        }).catch(function (err) {
+          Admin.toast(err.message || '预览失败', 'error');
+          loadList();
+        });
+      }
+
+      // ===== 同步数据库（参考后台 synchDbApi → GET /tool/gen/sync/{tableName}） =====
+      function syncDb(tableName) {
+        Admin.confirm('确定要同步表「' + tableName + '」的字段信息吗？', function () {
+          Admin.api.get('/tool/gen/sync/' + encodeURIComponent(tableName)).then(function () {
+            Admin.toast('同步成功', 'success');
+            loadList();
+          }).catch(function (err) {
+            Admin.toast(err.message || '同步失败', 'error');
+          });
+        });
+      }
+
+      // ===== 导入表弹窗 =====
+      function openImportModal() {
+        var body =
+          '<div class="admin-form-group">' +
+            '<label>搜索数据库表</label>' +
+            '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+              '<input type="text" id="db-table-search" class="glass-input" placeholder="输入表名称搜索" style="flex:1;" />' +
+              '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="db-search-btn">查询</button>' +
+            '</div>' +
+          '</div>' +
+          '<div id="db-table-container" style="max-height:360px;overflow-y:auto;"></div>' +
+          '<div class="admin-form-hint" style="margin-top:8px;">勾选要导入的表，点击「确认导入」</div>';
+
+        var footer =
+          '<button type="button" class="glass-btn glass-btn-ghost glass-btn-sm" data-modal-close>取消</button>' +
+          '<button type="button" class="glass-btn glass-btn-primary glass-btn-sm" id="btn-confirm-import">确认导入</button>';
+
+        Admin.openModal({
+          title: '导入数据库表',
+          body: body,
+          footer: footer,
+          onOpen: function (modal) {
+            var dbContainer = modal.querySelector('#db-table-container');
+            var dbSearchInput = modal.querySelector('#db-table-search');
+            var dbSearchBtn = modal.querySelector('#db-search-btn');
+            var confirmBtn = modal.querySelector('#btn-confirm-import');
+            var selectedTables = [];
+
+            function loadDbTables(keyword) {
+              dbContainer.innerHTML = '<div class="admin-loading"><div class="admin-loading-spinner"></div><p>查询中...</p></div>';
+              var params = { pageNum: 1, pageSize: 100 };
+              if (keyword) params.tableName = keyword;
+              Admin.api.get('/tool/gen/db/list', params).then(function (data) {
+                var page = Admin.getPageRecords(data);
+                var list = page.list || [];
+                if (list.length === 0) {
+                  dbContainer.innerHTML = '<div class="admin-empty"><p>未查询到可导入的表</p></div>';
+                  return;
+                }
+                var html = '<div class="admin-table-wrap"><div class="admin-table-scroll"><table class="admin-table"><thead><tr>' +
+                  '<th style="width:50px;text-align:center;"><input type="checkbox" id="db-check-all" /></th>' +
+                  '<th>表名称</th><th>表描述</th><th>创建时间</th>' +
+                  '</tr></thead><tbody>';
+                list.forEach(function (row) {
+                  html += '<tr>' +
+                    '<td style="text-align:center;"><input type="checkbox" class="db-table-check" value="' + Admin.esc(row.tableName) + '" /></td>' +
+                    '<td><span style="font-family:var(--font-mono,monospace);font-size:0.84rem;font-weight:600;">' + Admin.esc(row.tableName) + '</span></td>' +
+                    '<td>' + Admin.esc(row.tableComment || '-') + '</td>' +
+                    '<td>' + Admin.formatDate(row.createTime, true) + '</td>' +
+                    '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+                dbContainer.innerHTML = html;
+
+                // 全选
+                var checkAll = modal.querySelector('#db-check-all');
+                if (checkAll) {
+                  checkAll.addEventListener('change', function () {
+                    var checked = this.checked;
+                    modal.querySelectorAll('.db-table-check').forEach(function (cb) { cb.checked = checked; });
+                  });
+                }
+              }).catch(function (err) {
+                dbContainer.innerHTML = '<div class="admin-empty"><p>' + Admin.esc(err.message || '查询失败') + '</p></div>';
+              });
+            }
+
+            dbSearchBtn.addEventListener('click', function () {
+              loadDbTables(dbSearchInput.value.trim());
+            });
+            dbSearchInput.addEventListener('keydown', function (e) {
+              if (e.key === 'Enter') loadDbTables(dbSearchInput.value.trim());
+            });
+
+            confirmBtn.addEventListener('click', function () {
+              var checkboxes = modal.querySelectorAll('.db-table-check:checked');
+              var tables = [];
+              checkboxes.forEach(function (cb) { tables.push(cb.value); });
+              if (tables.length === 0) {
+                Admin.toast('请先选择要导入的表', 'info');
+                return;
+              }
+              confirmBtn.disabled = true;
+              confirmBtn.textContent = '导入中...';
+              Admin.api.post('/tool/gen/importTable', { tables: tables.join(',') }).then(function () {
+                Admin.toast('导入成功', 'success');
+                Admin.closeModal();
+                loadList();
+              }).catch(function (err) {
+                Admin.toast(err.message || '导入失败', 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '确认导入';
+              });
+            });
+
+            // 初始加载
+            loadDbTables('');
+          },
+        });
+      }
+
+      // ===== 事件绑定 =====
+      tableContainer.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var action = btn.getAttribute('data-action');
+        var id = btn.getAttribute('data-id');
+        var name = btn.getAttribute('data-name');
+        if (action === 'delete') {
+          handleDelete(id);
+        } else if (action === 'preview') {
+          previewCode(id);
+        } else if (action === 'gencode') {
+          genCode(name);
+        } else if (action === 'download') {
+          downloadCode(name);
+        }
+      });
+
+      btnSearch.addEventListener('click', doSearch);
+      btnReset.addEventListener('click', doReset);
+      btnRefresh.addEventListener('click', function () { loadList(); });
+      btnImport.addEventListener('click', openImportModal);
+      btnBatchDel.addEventListener('click', handleBatchDelete);
+      inputTableName.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') doSearch();
+      });
+      inputTableComment.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') doSearch();
+      });
+
+      // ===== 启动 =====
+      loadList();
+    }
+  })();
+</script>
+
+<style is:global>
+  /* 代码生成页 — 操作按钮 */
+  .act-preview, .act-gen, .act-download {
+    font-size: 0.82rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+  }
+  .act-preview {
+    color: var(--brand);
+    border-color: var(--brand-a25, rgba(99,102,241,0.25));
+    background: var(--brand-a08, rgba(99,102,241,0.08));
+  }
+  .act-preview:hover {
+    background: var(--brand-a15, rgba(99,102,241,0.15));
+  }
+  .act-gen {
+    color: #16a34a;
+    border-color: rgba(22,163,74,0.25);
+    background: rgba(22,163,74,0.08);
+  }
+  .act-gen:hover {
+    background: rgba(22,163,74,0.15);
+  }
+  .act-download {
+    color: #d97706;
+    border-color: rgba(217,119,6,0.25);
+    background: rgba(217,119,6,0.08);
+  }
+  .act-download:hover {
+    background: rgba(217,119,6,0.15);
+  }
+
+  /* 代码预览弹窗 */
+  .gen-preview-wrap {
+    display: flex;
+    gap: 0;
+    height: 480px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .gen-file-list {
+    width: 200px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--lg-bg-subtle, var(--surface));
+    border-right: 1px solid var(--lg-border-subtle, var(--border));
+  }
+  .flat .gen-file-list {
+    background: var(--bg-secondary, #f7f7f8);
+  }
+  .gen-file-tab {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 10px;
+    margin-bottom: 2px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-family: var(--font-mono, monospace);
+    cursor: pointer;
+    transition: all 0.15s;
+    word-break: break-all;
+  }
+  .gen-file-tab:hover {
+    background: var(--brand-a08, rgba(99,102,241,0.08));
+    color: var(--brand);
+  }
+  .gen-file-tab.active {
+    background: var(--brand-a15, rgba(99,102,241,0.15));
+    color: var(--brand);
+    font-weight: 600;
+  }
+  .gen-code-viewer {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .gen-code-block {
+    flex: 1;
+    margin: 0;
+    padding: 14px 16px;
+    overflow: auto;
+    background: var(--lg-bg, rgba(255,255,255,0.6));
+    font-family: var(--font-mono, 'Courier New', monospace);
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--text-primary);
+    white-space: pre;
+    tab-size: 4;
+  }
+  .dark .gen-code-block {
+    background: rgba(30,30,46,0.6);
+    color: #e0e0e0;
+  }
+  .flat .gen-code-block {
+    background: var(--surface);
+  }
+</style>

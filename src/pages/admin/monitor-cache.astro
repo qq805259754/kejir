@@ -1,0 +1,563 @@
+---
+/**
+ * 管理后台 - 监控中心 - 缓存监控 - /admin/monitor-cache
+ * 上半部分：缓存概览（Redis 信息 + 内存使用率 + 清空缓存）
+ * 下半部分：缓存键名列表（搜索 + 表格 + 分页 + 删除单个键）
+ * API:
+ *   GET    /monitor/cache/info    缓存基本信息
+ *   GET    /monitor/cache/keys    缓存键名列表 (params: pageNum, pageSize, keyPattern)
+ *   GET    /monitor/cache/memory  缓存内存信息
+ *   DELETE /monitor/cache         清空缓存
+ *   DELETE /monitor/cache/keys/{key}  删除单个缓存键
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import '../../styles/admin.css';
+---
+
+<BaseLayout title="缓存监控" description="Redis 缓存监控" currentPath="/admin">
+  <div class="content-zone admin-page monitor-page">
+    <!-- 返回链接 -->
+    <a href="/admin" class="admin-back-link">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回管理后台
+    </a>
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>缓存监控</h1>
+      <p class="page-sub">查看 Redis 缓存运行状态与键名列表</p>
+    </div>
+
+    <!-- ===== 缓存概览 ===== -->
+    <section class="monitor-section">
+      <h2 class="monitor-section-title">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        <span>缓存概览</span>
+      </h2>
+
+      <div id="cache-overview">
+        <div class="admin-loading">
+          <div class="admin-loading-spinner"></div>
+          <p>正在加载缓存信息...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 缓存键名列表 ===== -->
+    <section class="monitor-section">
+      <h2 class="monitor-section-title">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        <span>缓存键名</span>
+      </h2>
+
+      <!-- 搜索栏 -->
+      <div class="admin-search-bar" id="cache-search-bar">
+        <div class="admin-search-field">
+          <label>键名模式</label>
+          <input type="text" class="glass-input" id="search-keyPattern" placeholder="如 user:* 或 login_tokens:*" />
+        </div>
+        <button class="glass-btn glass-btn-primary glass-btn-sm" id="btn-search">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          搜索
+        </button>
+        <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-reset">重置</button>
+      </div>
+
+      <!-- 工具栏 -->
+      <div class="admin-toolbar">
+        <button class="glass-btn glass-btn-ghost glass-btn-sm" id="btn-refresh-keys">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新
+        </button>
+      </div>
+
+      <!-- 表格容器 -->
+      <div id="cache-table-container"></div>
+
+      <!-- 分页容器 -->
+      <div id="cache-pagination-container"></div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style is:global>
+  .monitor-page { max-width: 1100px; }
+
+  /* ===== 分区 ===== */
+  .monitor-section {
+    margin-bottom: var(--sp-5);
+  }
+  .monitor-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--sp-3);
+    padding-left: var(--sp-2);
+    border-left: 3px solid var(--brand);
+  }
+  .monitor-section-title svg {
+    width: 16px;
+    height: 16px;
+    color: var(--brand);
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+    flex-shrink: 0;
+  }
+
+  /* ===== 概览卡片网格 ===== */
+  .cache-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--sp-3);
+  }
+  .cache-stat-card {
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow: inset 1px 1px 0.5px rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .flat .cache-stat-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .cache-stat-label {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+  }
+  .cache-stat-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    word-break: break-all;
+  }
+  .cache-stat-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-a15);
+    color: var(--brand);
+    margin-bottom: 4px;
+  }
+  .cache-stat-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
+  }
+
+  /* 内存使用率卡片（占两列） */
+  .cache-memory-card {
+    grid-column: span 2;
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%),
+      var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+    box-shadow: inset 1px 1px 0.5px rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .flat .cache-memory-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .cache-memory-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .cache-memory-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .cache-memory-detail {
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+  }
+
+  /* 清空缓存操作区 */
+  .cache-clear-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-top: var(--sp-3);
+    padding: var(--sp-3) var(--sp-4);
+    border-radius: var(--r-md);
+    background: var(--lg-bg);
+    border: 1px solid var(--lg-border-subtle);
+    flex-wrap: wrap;
+  }
+  .flat .cache-clear-bar {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+  .cache-clear-info {
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+  }
+
+  /* ===== 进度条 ===== */
+  .monitor-progress {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--lg-border-subtle, var(--border));
+    overflow: hidden;
+  }
+  .flat .monitor-progress {
+    background: var(--border);
+  }
+  .monitor-progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+  }
+  .monitor-progress-fill.normal { background: #22c55e; }
+  .monitor-progress-fill.warning { background: #f59e0b; }
+  .monitor-progress-fill.danger { background: #ef4444; }
+
+  /* TTL 标签 */
+  .cache-ttl-permanent {
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 768px) {
+    .cache-memory-card {
+      grid-column: span 1;
+    }
+    .cache-clear-bar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+</style>
+
+<script is:inline src="/scripts/admin.js"></script>
+<script is:inline data-astro-rerun>
+  (function () {
+    function ready(fn) {
+      if (window.Admin) return fn();
+      setTimeout(function () { ready(fn); }, 50);
+    }
+    ready(init);
+
+    function init() {
+      var Admin = window.Admin;
+
+    // ===== 登录检查 =====
+    if (!Admin.isLoggedIn()) {
+      location.href = '/login?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+
+    var overviewEl = document.getElementById('cache-overview');
+    var tableContainer = document.getElementById('cache-table-container');
+    var paginationContainer = document.getElementById('cache-pagination-container');
+
+    // ===== 工具函数 =====
+    function esc(s) { return Admin.esc(s); }
+    function val(v) {
+      if (v === undefined || v === null || v === '') return '-';
+      return v;
+    }
+    function fix1(v) {
+      var n = Number(v);
+      if (isNaN(n)) return '-';
+      return n.toFixed(1);
+    }
+    function progressClass(pct) {
+      var n = Number(pct);
+      if (isNaN(n)) return 'normal';
+      if (n >= 80) return 'danger';
+      if (n >= 60) return 'warning';
+      return 'normal';
+    }
+    function progressBar(pct) {
+      var n = Number(pct);
+      var v = isNaN(n) ? 0 : Math.max(0, Math.min(100, n));
+      var cls = progressClass(pct);
+      return '<div class="monitor-progress"><div class="monitor-progress-fill ' + cls + '" style="width:' + v + '%"></div></div>';
+    }
+
+    // 运行时长格式化（秒 → 天时分）
+    function formatUptime(seconds) {
+      var s = Number(seconds);
+      if (isNaN(s)) return val(seconds);
+      var d = Math.floor(s / 86400);
+      var h = Math.floor((s % 86400) / 3600);
+      var m = Math.floor((s % 3600) / 60);
+      var parts = [];
+      if (d > 0) parts.push(d + '天');
+      parts.push(h + '小时');
+      parts.push(m + '分钟');
+      return parts.join(' ');
+    }
+
+    // 格式化字节数（B → KB/MB/GB）
+    function formatBytes(bytes) {
+      var b = Number(bytes);
+      if (isNaN(b)) return val(bytes);
+      if (b < 1024) return b + ' B';
+      if (b < 1048576) return (b / 1024).toFixed(2) + ' KB';
+      if (b < 1073741824) return (b / 1048576).toFixed(2) + ' MB';
+      return (b / 1073741824).toFixed(2) + ' GB';
+    }
+
+    // 概览卡片
+    function statCard(iconSvg, label, value) {
+      return '<div class="cache-stat-card">' +
+        '<div class="cache-stat-icon">' + iconSvg + '</div>' +
+        '<div class="cache-stat-label">' + esc(label) + '</div>' +
+        '<div class="cache-stat-value">' + esc(val(value)) + '</div>' +
+        '</div>';
+    }
+
+    // SVG 图标
+    var ICON = {
+      version: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+      clients: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+      memory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3"/><path d="M10 19v-3"/><path d="M14 19v-3"/><path d="M18 19v-3"/><path d="M8 11V9"/><path d="M16 11V9"/><path d="M12 11V9"/><path d="M2 15h20"/><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z"/></svg>',
+      peak: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+      uptime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+      port: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>'
+    };
+
+    // ===== 渲染缓存概览 =====
+    function renderOverview(info, memory) {
+      // info: 缓存基本信息（来自 /monitor/cache/info）
+      // memory: 内存信息（来自 /monitor/cache/memory，含 used / total）
+      var html = '<div class="cache-grid">';
+      html += statCard(ICON.version, 'Redis 版本', info.version);
+      html += statCard(ICON.uptime, '运行模式', info.mode);
+      html += statCard(ICON.port, '端口', info.port);
+      html += statCard(ICON.uptime, '运行时间(天)', info.uptime);
+      html += statCard(ICON.clients, '连接客户端数', info.clients);
+      html += statCard(ICON.memory, '内存配置', info.maxmemory);
+      html += statCard(ICON.version, 'AOF 是否开启', info.aofEnabled);
+      html += statCard(ICON.version, 'RDB 是否成功', info.rdbLastSaveStatus);
+      html += statCard(ICON.clients, 'Key 数量', info.keys);
+      html += statCard(ICON.peak, '网络入口/出口(KBps)', (info.instantaneousInputKbps || '-') + ' / ' + (info.instantaneousOutputKbps || '-'));
+      html += '</div>';
+
+      // 内存使用率（来自独立的内存接口）
+      var memUsed = Number(memory.used);
+      var memTotal = Number(memory.total);
+      var memUsage = NaN;
+      if (!isNaN(memUsed) && !isNaN(memTotal) && memTotal > 0) {
+        memUsage = (memUsed / memTotal) * 100;
+      }
+
+      var memDisplay = isNaN(memUsage) ? '-' : fix1(memUsage) + '%';
+      html += '<div class="cache-memory-card" style="margin-top:var(--sp-3);">';
+      html += '<div class="cache-memory-header">';
+      html += '<span class="cache-memory-label">内存使用率</span>';
+      html += '<span class="cache-memory-detail">已用：' + esc(formatBytes(memory.used)) + ' / 总量：' + esc(formatBytes(memory.total)) + ' (' + esc(memDisplay) + ')</span>';
+      html += '</div>';
+      html += progressBar(memUsage);
+      html += '</div>';
+
+      // 清空缓存操作栏
+      html += '<div class="cache-clear-bar">';
+      html += '<span class="cache-clear-info">清空缓存将删除所有 Redis 键名数据，请谨慎操作。</span>';
+      html += '<button type="button" id="btn-clear-cache" class="glass-btn glass-btn-ghost glass-btn-sm" style="color:#dc2626;border-color:rgba(220,38,38,0.3);">';
+      html += '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+      html += '清空缓存';
+      html += '</button>';
+      html += '</div>';
+
+      overviewEl.innerHTML = html;
+
+      // 绑定清空缓存按钮
+      var clearBtn = document.getElementById('btn-clear-cache');
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          Admin.confirm('确定要清空所有缓存数据吗？此操作不可恢复。', function () {
+            Admin.api.del('/monitor/cache').then(function () {
+              Admin.toast('缓存已清空', 'success');
+              loadOverview();
+              loadKeys();
+            }).catch(function (err) {
+              Admin.toast(err.message || '清空缓存失败', 'error');
+            });
+          });
+        });
+      }
+    }
+
+    // ===== 加载缓存概览 =====
+    function loadOverview() {
+      // 并行加载基本信息和内存信息
+      Promise.all([
+        Admin.api.get('/monitor/cache/info').catch(function () { return {}; }),
+        Admin.api.get('/monitor/cache/memory').catch(function () { return {}; })
+      ]).then(function (results) {
+        renderOverview(results[0] || {}, results[1] || {});
+      }).catch(function (err) {
+        Admin.showError(overviewEl, err.message || '加载缓存信息失败');
+      });
+    }
+
+    // ===== 缓存键名列表 =====
+    var keyState = {
+      pageNum: 1,
+      pageSize: (window.__DEFAULT_PAGE_SIZE__ || 10),
+      total: 0,
+      keyPattern: '',
+      loading: false,
+    };
+
+    var keyColumns = [
+      {
+        key: 'key', title: '键名',
+        render: function (row) {
+          return '<span style="font-family:var(--font-mono);font-weight:600;word-break:break-all;">' + esc(val(row.key || row.cacheKey || row.name)) + '</span>';
+        }
+      },
+      {
+        key: 'type', title: '类型', width: '100px', align: 'center',
+        render: function (row) {
+          var t = row.type || row.dataType || row.valueType;
+          return t ? Admin.badge(t, 'info') : '<span style="color:var(--text-tertiary);">-</span>';
+        }
+      },
+      {
+        key: 'size', title: '大小', width: '110px', align: 'right',
+        render: function (row) {
+          var s = row.size !== undefined ? row.size : row.length;
+          var n = Number(s);
+          if (isNaN(n)) return '<span style="color:var(--text-tertiary);">-</span>';
+          return '<span style="font-family:var(--font-mono);">' + esc(n) + '</span>';
+        }
+      },
+      {
+        key: 'ttl', title: 'TTL(秒)', width: '100px', align: 'right',
+        render: function (row) {
+          var ttl = row.ttl !== undefined ? row.ttl : row.expire;
+          var n = Number(ttl);
+          if (isNaN(n)) return '<span style="color:var(--text-tertiary);">-</span>';
+          if (n < 0) return '<span class="cache-ttl-permanent">永久</span>';
+          return '<span style="font-family:var(--font-mono);">' + esc(n) + '</span>';
+        }
+      },
+      {
+        key: 'actions', title: '操作', width: '90px', align: 'center',
+        render: function (row) {
+          var k = row.key || row.cacheKey || row.name || '';
+          return '<span class="col-actions"><button type="button" class="act-del" data-key="' + esc(k) + '">删除</button></span>';
+        }
+      },
+    ];
+
+    function loadKeys() {
+      if (keyState.loading) return;
+      keyState.loading = true;
+      Admin.showLoading(tableContainer);
+      var params = {
+        pageNum: keyState.pageNum,
+        pageSize: keyState.pageSize,
+      };
+      if (keyState.keyPattern) params.keyPattern = keyState.keyPattern;
+
+      Admin.api.get('/monitor/cache/keys', params).then(function (data) {
+        keyState.loading = false;
+        var page = Admin.getPageRecords(data);
+        if (page.list.length === 0 && keyState.pageNum > 1) {
+          keyState.pageNum--;
+          return loadKeys();
+        }
+        keyState.total = page.total;
+        Admin.renderTable(tableContainer, keyColumns, page.list, {
+          emptyText: '暂无缓存键名数据',
+        });
+        Admin.renderPagination(paginationContainer, {
+          current: keyState.pageNum,
+          pageSize: keyState.pageSize,
+          total: keyState.total,
+          onChange: function (pageNum, pageSize) {
+            keyState.pageNum = pageNum;
+            keyState.pageSize = pageSize;
+            loadKeys();
+          },
+        });
+      }).catch(function (err) {
+        keyState.loading = false;
+        Admin.showError(tableContainer, err.message || '加载缓存键名失败');
+      });
+    }
+
+    // ===== 搜索 / 重置 =====
+    function doSearch() {
+      keyState.keyPattern = document.getElementById('search-keyPattern').value.trim();
+      keyState.pageNum = 1;
+      loadKeys();
+    }
+    function doReset() {
+      document.getElementById('search-keyPattern').value = '';
+      keyState.keyPattern = '';
+      keyState.pageNum = 1;
+      loadKeys();
+    }
+
+    // ===== 事件绑定 =====
+    document.getElementById('btn-search').addEventListener('click', doSearch);
+    document.getElementById('btn-reset').addEventListener('click', doReset);
+    document.getElementById('btn-refresh-keys').addEventListener('click', loadKeys);
+    document.getElementById('search-keyPattern').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // 表格删除单个键（事件委托）
+    tableContainer.addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-key]');
+      if (!btn) return;
+      var key = btn.getAttribute('data-key');
+      if (!key) return;
+      Admin.confirm('确定要删除缓存键「' + key + '」吗？', function () {
+        Admin.api.del('/monitor/cache/keys/' + encodeURIComponent(key)).then(function () {
+          Admin.toast('删除成功', 'success');
+          loadKeys();
+        }).catch(function (err) {
+          Admin.toast(err.message || '删除失败', 'error');
+        });
+      });
+    });
+
+    // ===== 初始化 =====
+    loadOverview();
+    loadKeys();
+    }
+  })();
+</script>
