@@ -1,0 +1,22 @@
+{
+  "name": "tech-heat-blog",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build --mode production",
+    "build:dev": "astro build --mode development",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.0",
+    "astro": "^7.2.0",
+    "gsap": "^3.12.5"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=9.6.5"
+  }
+}

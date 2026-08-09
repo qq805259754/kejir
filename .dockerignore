@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Node.js
+node_modules
+npm-debug.log*
+.npm
+
+# 本地环境文件（生产变量不应进入镜像）
+.env
+.env.local
+.env.development
+.env.*.local
+
+# 开发/编辑器
+.vscode
+.idea
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试与文档（部署产物不需要）
+coverage
+*.md
+!DEPLOY.md
+
+# 本地开发产物/日志
+logs
+*.log
+
+# Docker 自身
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# 注意：ssl/ 目录包含 SSL 证书，需要进入构建上下文由 Dockerfile.nginx 复制到镜像内
+# 请勿在此处排除 ssl/
