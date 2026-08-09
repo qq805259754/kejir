@@ -3,7 +3,7 @@
 > 手动上传文件部署，适用于 WinSCP / FileZilla / Xftp 等 SFTP 工具。
 > 本文档基于以下部署约定编写：
 > - 本地构建后，手动将文件上传到 Linux 服务器 `/usr/local/nginx/kejir` 目录
-> - SSL 证书上传到 `/usr/local/nginx/kejir/ssl/`
+> - SSL 证书上传到 `项目根目录ssl/`
 > - 服务器使用 Docker Compose 启动 SSR + Nginx 容器
 > - Nginx 静态资源与 SSL 证书统一放在容器内 `/usr/local/nginx`，通过 `Dockerfile.nginx` 构建时复制进去（无 volume 挂载）
 > - 推荐使用 `deploy.sh` 一键部署脚本自动检查证书并构建启动容器
@@ -131,7 +131,7 @@ PUBLIC_BUILD_ENV=production
 准备 SSL 证书文件：
 
 - **本地整理时**：放到项目根目录的 `ssl/` 文件夹下，便于打包上传
-- **服务器上**：上传到 `/usr/local/nginx/kejir/ssl/` 目录
+- **服务器上**：上传到 `项目根目录ssl/` 目录
 
 ```
 ssl/
@@ -273,9 +273,9 @@ grep -o "X-MW-Version[^\"]*" dist/server/virtual_astro_middleware.mjs
 
 ### 3.1 需要上传的完整文件清单
 
-在本地项目根目录整理以下文件/文件夹，准备通过 SFTP 工具上传到服务器 `/usr/local/nginx/kejir/` 目录。
+在本地项目根目录整理以下文件/文件夹，准备通过 SFTP 工具上传到服务器 `项目根目录` 目录。
 
-### A. 项目文件（上传到 `/usr/local/nginx/kejir/`）
+### A. 项目文件（上传到 `项目根目录`）
 
 ```
 项目根目录/
@@ -293,10 +293,10 @@ grep -o "X-MW-Version[^\"]*" dist/server/virtual_astro_middleware.mjs
 └── .env.production              ← 生产环境变量（建议保留，便于排查）
 ```
 
-### B. SSL 证书（上传到 `/usr/local/nginx/kejir/ssl/`）
+### B. SSL 证书（上传到 `项目根目录ssl/`）
 
 ```
-/usr/local/nginx/kejir/ssl/
+项目根目录ssl/
 ├── kejir.com_bundle.pem         ← SSL 证书文件（含证书链）
 └── kejir.com.key                ← SSL 私钥文件
 ```
@@ -305,18 +305,18 @@ grep -o "X-MW-Version[^\"]*" dist/server/virtual_astro_middleware.mjs
 
 | 文件/目录 | 是否必须 | 服务器路径 | 说明 |
 |-----------|----------|------------|------|
-| `dist/` | 是 | `/usr/local/nginx/kejir/dist/` | 构建产物。`dist/server/` 给 SSR 容器使用，`dist/client/` 给 Nginx 容器使用 |
-| `docker-compose.yml` | 是 | `/usr/local/nginx/kejir/docker-compose.yml` | 编排 SSR 和 Nginx 容器 |
-| `Dockerfile` | 是 | `/usr/local/nginx/kejir/Dockerfile` | SSR 容器镜像构建文件 |
-| `Dockerfile.nginx` | 是 | `/usr/local/nginx/kejir/Dockerfile.nginx` | Nginx 容器镜像构建文件，会把静态资源复制到镜像内 `/usr/local/nginx/kejir`，把 SSL 证书复制到 `/usr/local/nginx/ssl` |
-| `deploy.sh` | 推荐 | `/usr/local/nginx/kejir/deploy.sh` | 一键部署脚本，自动检查 SSL 证书并构建启动容器 |
-| `nginx-main.conf` | 是 | `/usr/local/nginx/kejir/nginx-main.conf` | Nginx 主配置，会被 Dockerfile.nginx 复制到 /etc/nginx/nginx.conf |
-| `nginx-kejir.conf` | 是 | `/usr/local/nginx/kejir/nginx-kejir.conf` | Nginx 站点配置，会被 Dockerfile.nginx 复制到 /etc/nginx/conf.d/default.conf |
-| `package.json` | 是 | `/usr/local/nginx/kejir/package.json` | SSR 容器安装生产依赖需要 |
-| `package-lock.json` | 是 | `/usr/local/nginx/kejir/package-lock.json` | 锁定依赖版本，Dockerfile 内使用 `npm ci` |
-| `.env.production` | 建议 | `/usr/local/nginx/kejir/.env.production` | 构建时环境变量，保留便于排查和后续重建 |
-| `ssl/kejir.com_bundle.pem` | 是 | `/usr/local/nginx/kejir/ssl/kejir.com_bundle.pem` | SSL 证书文件，上传到项目目录下的 ssl/ 文件夹 |
-| `ssl/kejir.com.key` | 是 | `/usr/local/nginx/kejir/ssl/kejir.com.key` | SSL 私钥文件，上传到项目目录下的 ssl/ 文件夹 |
+| `dist/` | 是 | `项目根目录dist/` | 构建产物。`dist/server/` 给 SSR 容器使用，`dist/client/` 给 Nginx 容器使用 |
+| `docker-compose.yml` | 是 | `项目根目录docker-compose.yml` | 编排 SSR 和 Nginx 容器 |
+| `Dockerfile` | 是 | `项目根目录Dockerfile` | SSR 容器镜像构建文件 |
+| `Dockerfile.nginx` | 是 | `项目根目录Dockerfile.nginx` | Nginx 容器镜像构建文件，会把静态资源复制到镜像内 `/usr/local/nginx/kejir`，把 SSL 证书复制到 `/usr/local/nginx/ssl` |
+| `deploy.sh` | 推荐 | `项目根目录deploy.sh` | 一键部署脚本，自动检查 SSL 证书并构建启动容器 |
+| `nginx-main.conf` | 是 | `项目根目录nginx-main.conf` | Nginx 主配置，会被 Dockerfile.nginx 复制到 /etc/nginx/nginx.conf |
+| `nginx-kejir.conf` | 是 | `项目根目录nginx-kejir.conf` | Nginx 站点配置，会被 Dockerfile.nginx 复制到 /etc/nginx/conf.d/default.conf |
+| `package.json` | 是 | `项目根目录package.json` | SSR 容器安装生产依赖需要 |
+| `package-lock.json` | 是 | `项目根目录package-lock.json` | 锁定依赖版本，Dockerfile 内使用 `npm ci` |
+| `.env.production` | 建议 | `项目根目录.env.production` | 构建时环境变量，保留便于排查和后续重建 |
+| `ssl/kejir.com_bundle.pem` | 是 | `项目根目录ssl/kejir.com_bundle.pem` | SSL 证书文件，上传到项目目录下的 ssl/ 文件夹 |
+| `ssl/kejir.com.key` | 是 | `项目根目录ssl/kejir.com.key` | SSL 私钥文件，上传到项目目录下的 ssl/ 文件夹 |
 
 ### 3.3 不需要上传的文件
 
@@ -371,18 +371,18 @@ ls -ld /usr/local/nginx/kejir
 
 **目录规划**：
 - `/usr/local/nginx/kejir`：项目部署根目录，存放 docker-compose.yml、Dockerfile、构建产物、SSL 证书等
-- `/usr/local/nginx/kejir/ssl`：SSL 证书存放目录
-- `/usr/local/nginx/kejir/dist`：构建产物存放目录
+- `项目根目录ssl`：SSL 证书存放目录
+- `项目根目录dist`：构建产物存放目录
 
 ### 4.3 上传文件
 
-在 SFTP 工具中，将所有文件上传到 `/usr/local/nginx/kejir/` 目录即可。SSL 证书作为项目目录下的 `ssl/` 子目录一并上传。
+在 SFTP 工具中，将所有文件上传到 `项目根目录` 目录即可。SSL 证书作为项目目录下的 `ssl/` 子目录一并上传。
 
 #### 4.3.1 推荐上传顺序
 
-1. 先上传配置文件到 `/usr/local/nginx/kejir/`：`docker-compose.yml`、`Dockerfile`、`Dockerfile.nginx`、`deploy.sh`、`nginx-main.conf`、`nginx-kejir.conf`、`package.json`、`package-lock.json`、`.env.production`
-2. 再上传 SSL 证书到 `/usr/local/nginx/kejir/ssl/`：`kejir.com_bundle.pem`、`kejir.com.key`
-3. 最后上传 `dist/` 目录到 `/usr/local/nginx/kejir/`（文件较多，耗时最长）
+1. 先上传配置文件到 `项目根目录`：`docker-compose.yml`、`Dockerfile`、`Dockerfile.nginx`、`deploy.sh`、`nginx-main.conf`、`nginx-kejir.conf`、`package.json`、`package-lock.json`、`.env.production`
+2. 再上传 SSL 证书到 `项目根目录ssl/`：`kejir.com_bundle.pem`、`kejir.com.key`
+3. 最后上传 `dist/` 目录到 `项目根目录`（文件较多，耗时最长）
 
 #### 4.3.2 上传后的服务器目录结构
 
@@ -420,7 +420,7 @@ ls -ld /usr/local/nginx/kejir
 - `dist/` 目录包含大量小文件，上传可能较慢，请耐心等待
 - 使用 WinSCP 时，建议开启「自动同步」或「保持目录结构」选项
 - `.env.production` 是隐藏文件（以点开头），SFTP 工具中需开启显示隐藏文件
-- **SSL 证书上传到 `/usr/local/nginx/kejir/ssl/`，与项目文件一起管理**
+- **SSL 证书上传到 `项目根目录ssl/`，与项目文件一起管理**
 - 上传前确认证书文件名与 `nginx-kejir.conf` 中配置的一致
 - 如果之前部署过，上传 `dist/` 时选择覆盖旧文件
 
@@ -444,7 +444,7 @@ ls -la dist/client/assets/
 ls -la dist/client/favicon.svg
 
 # 4. 检查 SSL 证书
-ls -la /usr/local/nginx/kejir/ssl/
+ls -la 项目根目录ssl/
 # 应看到 kejir.com_bundle.pem 和 kejir.com.key
 ```
 
@@ -513,7 +513,7 @@ chmod +x deploy.sh
 1. 检查项目目录是否存在
 2. 检查 Docker / Docker Compose 是否已安装
 3. 检查 `selfnet` 网络是否存在（不存在则自动创建）
-4. 检查 `/usr/local/nginx/kejir/ssl/` 下证书文件是否齐全
+4. 检查 `项目根目录ssl/` 下证书文件是否齐全
 5. 执行 `docker compose up -d --build`
 6. 检查容器状态并验证 Nginx 配置
 
@@ -521,7 +521,7 @@ chmod +x deploy.sh
 
 ### 5.5 部署方式二：手动构建（备选）
 
-如果不使用 `deploy.sh`，确认 SSL 证书已上传到 `/usr/local/nginx/kejir/ssl/` 后，直接构建并启动容器：
+如果不使用 `deploy.sh`，确认 SSL 证书已上传到 `项目根目录ssl/` 后，直接构建并启动容器：
 
 ```bash
 cd /usr/local/nginx/kejir
@@ -656,7 +656,7 @@ curl -s -X POST https://kejir.com/auth/login \
 npm run build
 ```
 
-2. 使用 SFTP 工具上传新的 `dist/` 目录到 `/usr/local/nginx/kejir/dist/`（覆盖旧文件）
+2. 使用 SFTP 工具上传新的 `dist/` 目录到 `项目根目录dist/`（覆盖旧文件）
 
 3. 如果修改了 `Dockerfile`、`Dockerfile.nginx`、`docker-compose.yml` 或 Nginx 配置文件，也一并上传
 
@@ -671,7 +671,7 @@ docker compose up -d --build
 
 如果只改了 `nginx-kejir.conf` 或 `nginx-main.conf`：
 
-1. SFTP 上传新的配置文件到 `/usr/local/nginx/kejir/`
+1. SFTP 上传新的配置文件到 `项目根目录`
 2. 重建 Nginx 容器：
 
 ```bash
@@ -683,7 +683,7 @@ docker compose up -d --build nginx
 
 由于静态资源已复制到 Nginx 镜像内，更新后需要重新构建 Nginx 镜像：
 
-1. SFTP 上传新的 `dist/client/` 到 `/usr/local/nginx/kejir/dist/client/`（覆盖旧文件）
+1. SFTP 上传新的 `dist/client/` 到 `项目根目录dist/client/`（覆盖旧文件）
 2. 重建 Nginx 容器：
 
 ```bash
@@ -697,7 +697,7 @@ docker compose up -d --build nginx
 
 由于 SSL 证书已复制到 Nginx 镜像内，更新后需要重新构建 Nginx 镜像：
 
-1. SFTP 上传新的证书文件到 `/usr/local/nginx/kejir/ssl/`，覆盖旧文件
+1. SFTP 上传新的证书文件到 `项目根目录ssl/`，覆盖旧文件
 2. 重新部署（如果已上传 `deploy.sh`，推荐直接运行脚本）：
 
 ```bash
@@ -715,7 +715,7 @@ docker compose up -d --build nginx
 3. 验证新证书：
 
 ```bash
-openssl x509 -in /usr/local/nginx/kejir/ssl/kejir.com_bundle.pem -noout -dates
+openssl x509 -in 项目根目录ssl/kejir.com_bundle.pem -noout -dates
 docker exec kejir-nginx nginx -t
 ```
 
@@ -761,7 +761,7 @@ docker exec -it kejir-ssr sh
 docker exec -it kejir-nginx sh
 
 # 查看 Nginx 容器内静态资源
-docker exec kejir-nginx ls -la /usr/local/nginx/kejir/dist/client
+docker exec kejir-nginx ls -la 项目根目录dist/client
 
 # 查看 Nginx 容器内证书
 docker exec kejir-nginx ls -la /usr/local/nginx/ssl
@@ -836,16 +836,16 @@ docker network inspect selfnet --format '{{range .Containers}}{{.Name}} {{end}}'
 
 ```bash
 # 检查证书文件是否存在（宿主机路径）
-ls -la /usr/local/nginx/kejir/ssl/
+ls -la 项目根目录ssl/
 
 # 测试 Nginx 配置
 docker exec kejir-nginx nginx -t
 
 # 查看证书有效期
-openssl x509 -in /usr/local/nginx/kejir/ssl/kejir.com_bundle.pem -noout -dates
+openssl x509 -in 项目根目录ssl/kejir.com_bundle.pem -noout -dates
 
 # 检查证书链是否完整
-openssl x509 -in /usr/local/nginx/kejir/ssl/kejir.com_bundle.pem -noout -text | grep -A2 "Subject Alternative Name"
+openssl x509 -in 项目根目录ssl/kejir.com_bundle.pem -noout -text | grep -A2 "Subject Alternative Name"
 ```
 
 **常见原因**：
