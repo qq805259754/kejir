@@ -2,7 +2,7 @@
 
 > 手动上传文件部署，适用于 WinSCP / FileZilla / Xftp 等 SFTP 工具。
 > 本文档基于以下部署约定编写：
-> - 本地构建后，手动将文件上传到 Linux 服务器 `/usr/local/nginx/kejir` 目录
+> - 本地构建后，手动将文件上传到 Linux 服务器 `项目根目录` 目录
 > - SSL 证书上传到 `项目根目录ssl/`
 > - 服务器使用 Docker Compose 启动 SSR + Nginx 容器
 > - Nginx 静态资源与 SSL 证书统一放在容器内 `/usr/local/nginx`，通过 `Dockerfile.nginx` 构建时复制进去（无 volume 挂载）
@@ -308,7 +308,7 @@ grep -o "X-MW-Version[^\"]*" dist/server/virtual_astro_middleware.mjs
 | `dist/` | 是 | `项目根目录dist/` | 构建产物。`dist/server/` 给 SSR 容器使用，`dist/client/` 给 Nginx 容器使用 |
 | `docker-compose.yml` | 是 | `项目根目录docker-compose.yml` | 编排 SSR 和 Nginx 容器 |
 | `Dockerfile` | 是 | `项目根目录Dockerfile` | SSR 容器镜像构建文件 |
-| `Dockerfile.nginx` | 是 | `项目根目录Dockerfile.nginx` | Nginx 容器镜像构建文件，会把静态资源复制到镜像内 `/usr/local/nginx/kejir`，把 SSL 证书复制到 `/usr/local/nginx/ssl` |
+| `Dockerfile.nginx` | 是 | `项目根目录Dockerfile.nginx` | Nginx 容器镜像构建文件，会把静态资源复制到镜像内 `项目根目录`，把 SSL 证书复制到 `/usr/local/nginx/ssl` |
 | `deploy.sh` | 推荐 | `项目根目录deploy.sh` | 一键部署脚本，自动检查 SSL 证书并构建启动容器 |
 | `nginx-main.conf` | 是 | `项目根目录nginx-main.conf` | Nginx 主配置，会被 Dockerfile.nginx 复制到 /etc/nginx/nginx.conf |
 | `nginx-kejir.conf` | 是 | `项目根目录nginx-kejir.conf` | Nginx 站点配置，会被 Dockerfile.nginx 复制到 /etc/nginx/conf.d/default.conf |
@@ -363,14 +363,14 @@ grep -o "X-MW-Version[^\"]*" dist/server/virtual_astro_middleware.mjs
 
 ```bash
 # 创建项目部署目录
-mkdir -p /usr/local/nginx/kejir
+mkdir -p 项目根目录
 
 # 查看目录是否创建成功
-ls -ld /usr/local/nginx/kejir
+ls -ld 项目根目录
 ```
 
 **目录规划**：
-- `/usr/local/nginx/kejir`：项目部署根目录，存放 docker-compose.yml、Dockerfile、构建产物、SSL 证书等
+- `项目根目录`：项目部署根目录，存放 docker-compose.yml、Dockerfile、构建产物、SSL 证书等
 - `项目根目录ssl`：SSL 证书存放目录
 - `项目根目录dist`：构建产物存放目录
 
@@ -429,7 +429,7 @@ ls -ld /usr/local/nginx/kejir
 SSH 登录服务器，执行以下检查：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 
 # 1. 检查所有配置文件是否上传
 ls -la docker-compose.yml Dockerfile Dockerfile.nginx deploy.sh nginx-main.conf nginx-kejir.conf package.json package-lock.json .env.production
@@ -458,7 +458,7 @@ ls -la 项目根目录ssl/
 
 ```bash
 ssh root@你的服务器IP
-cd /usr/local/nginx/kejir
+cd 项目根目录
 ```
 
 ### 5.2 确认后端容器运行状态
@@ -490,7 +490,7 @@ docker network create selfnet
 如果是完整重新部署，建议先停止并删除旧容器：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose down
 ```
 
@@ -504,7 +504,7 @@ docker compose down
 
 ```bash
 ssh root@你的服务器IP
-cd /usr/local/nginx/kejir
+cd 项目根目录
 chmod +x deploy.sh
 ./deploy.sh
 ```
@@ -524,7 +524,7 @@ chmod +x deploy.sh
 如果不使用 `deploy.sh`，确认 SSL 证书已上传到 `项目根目录ssl/` 后，直接构建并启动容器：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose up -d --build
 ```
 
@@ -622,28 +622,6 @@ curl -sI https://kejir.com/api/webConfig | grep X-MW-Version
 # 如果不是，说明 dist/ 未更新或构建未生效，需重新构建上传
 ```
 
-### 6.7 验证登录接口
-
-```bash
-# 测试 POST 请求体转发是否正常
-curl -s -X POST https://kejir.com/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123","source":"PC","nickname":""}' \
-  | head -c 300
-# 应返回登录成功 JSON（含 token）
-```
-
-### 6.8 浏览器验证
-
-在浏览器中访问：
-
-- `https://kejir.com` — 首页正常显示文章列表
-- `https://kejir.com/login` — 登录页正常，能成功登录
-- `https://kejir.com/admin` — 后台菜单正常加载（需登录）
-- 浏览器地址栏显示锁形图标（HTTPS 证书有效）
-
----
-
 ## 七、后续更新部署
 
 ### 7.1 代码更新后重新部署
@@ -663,7 +641,7 @@ npm run build
 4. 服务器上重建并重启：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose up -d --build
 ```
 
@@ -675,7 +653,7 @@ docker compose up -d --build
 2. 重建 Nginx 容器：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose up -d --build nginx
 ```
 
@@ -687,7 +665,7 @@ docker compose up -d --build nginx
 2. 重建 Nginx 容器：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose up -d --build nginx
 ```
 
@@ -701,14 +679,14 @@ docker compose up -d --build nginx
 2. 重新部署（如果已上传 `deploy.sh`，推荐直接运行脚本）：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 ./deploy.sh
 ```
 
    或手动重建 Nginx 容器：
 
 ```bash
-cd /usr/local/nginx/kejir
+cd 项目根目录
 docker compose up -d --build nginx
 ```
 
@@ -776,7 +754,7 @@ docker exec kejir-nginx ls -la /usr/local/nginx/ssl
 |------|------|
 | `docker-compose.yml` | 编排 SSR + Nginx 容器，配置网络。Nginx 静态资源和 SSL 证书已内置镜像，无需 volume 挂载 |
 | `Dockerfile` | SSR 镜像：基于 `node:22-alpine`，使用 `npm ci` 安装生产依赖，复制 `dist/server` |
-| `Dockerfile.nginx` | Nginx 镜像：复制静态资源到 `/usr/local/nginx/kejir`、SSL 证书到 `/usr/local/nginx/ssl`，设置 `nginx:nginx` 权限，自定义启动脚本绕过 SELinux。构建时会检查证书是否存在 |
+| `Dockerfile.nginx` | Nginx 镜像：复制静态资源到 `项目根目录`、SSL 证书到 `/usr/local/nginx/ssl`，设置 `nginx:nginx` 权限，自定义启动脚本绕过 SELinux。构建时会检查证书是否存在 |
 | `deploy.sh` | 一键部署脚本：检查证书、构建并启动容器 |
 | `nginx-main.conf` | Nginx 主配置：pid 路径、错误日志路径、gzip 压缩、mime types |
 | `nginx-kejir.conf` | Nginx 站点配置：HTTPS、反向代理、静态资源服务、安全头、文件上传大小限制 |
